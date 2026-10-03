@@ -2,8 +2,20 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Terms of Service - Video Downloader",
-  description: "Read the terms and conditions for using Video Downloader.",
+  title: "Terms of Service - Vidsavey",
+  description:
+    "Read the terms and conditions for using Vidsavey, the free online video downloader for MP4 and MP3 downloads.",
+  keywords:
+    "vidsavey terms of service, terms and conditions, video downloader terms, usage policy, online video downloader terms",
+  alternates: {
+    canonical: "/terms",
+  },
+  openGraph: {
+    title: "Terms of Service - Vidsavey",
+    description:
+      "Read the terms and conditions for using Vidsavey, the free online video downloader for MP4 and MP3 downloads.",
+    type: "website",
+  },
 };
 
 // 集中管理，未来修改联系方式只需改这里
@@ -26,7 +38,7 @@ const SECTIONS: TermsSection[] = [
     blocks: [
       {
         type: "paragraph",
-        text: 'These Terms of Service ("Terms") govern your access to and use of Video Downloader (the "Service"), an online tool that allows you to submit video URLs, analyze video information, and download videos or audio files in MP4 or MP3 format. The Service is designed to work without registration: you do not need to create an account or sign in to use it.',
+        text: 'These Terms of Service ("Terms") govern your access to and use of Vidsavey (the "Service"), an online tool that allows you to submit video URLs, analyze video information, and download videos or audio files in MP4 or MP3 format. The Service is designed to work without registration: you do not need to create an account or sign in to use it.',
       },
     ],
   },
@@ -217,14 +229,17 @@ export default function TermsOfServicePage() {
     <div className="flex min-h-screen flex-col bg-white text-slate-900">
       {/* Header */}
       <header className="border-b border-slate-100 bg-white">
-        <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-6">
+        <div className="mx-auto flex h-[72px] max-w-[1200px] items-center justify-between px-8">
           <Link href="/" className="flex items-center gap-2.5">
-            <span
-              aria-hidden="true"
-              className="h-2.5 w-2.5 rounded-md bg-blue-600"
+            <img
+              src="/vidsavey-logo.png"
+              alt="Vidsavey"
+              width={32}
+              height={32}
+              className="h-8 w-8 shrink-0 object-contain"
             />
-            <span className="text-lg font-bold tracking-tight text-slate-900">
-              Video Downloader
+            <span className="text-[22px] font-bold tracking-tight text-slate-900">
+              Vidsavey
             </span>
           </Link>
 
@@ -270,7 +285,7 @@ export default function TermsOfServicePage() {
       {/* Footer */}
       <footer className="border-t border-slate-100 bg-white">
         <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-3 px-6 py-10 text-sm text-slate-500 sm:flex-row">
-          <p>© 2026 Video Downloader. All rights reserved.</p>
+          <p>© 2026 Vidsavey. All rights reserved.</p>
 
           <Link href="/" className="transition hover:text-slate-900">
             Home

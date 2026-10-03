@@ -2,9 +2,20 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy - Video Downloader",
+  title: "Privacy Policy - Vidsavey",
   description:
-    "Learn how Video Downloader handles information, video URLs, privacy, and data security.",
+    "Learn how Vidsavey handles information, video URLs, privacy, and data security. No account required, no ads, no tracking cookies.",
+  keywords:
+    "vidsavey privacy policy, privacy policy, data protection, video downloader privacy, no tracking, online video downloader privacy",
+  alternates: {
+    canonical: "/privacy",
+  },
+  openGraph: {
+    title: "Privacy Policy - Vidsavey",
+    description:
+      "Learn how Vidsavey handles information, video URLs, privacy, and data security. No account required, no ads, no tracking cookies.",
+    type: "website",
+  },
 };
 
 // 集中管理，未来修改联系方式只需改这里
@@ -27,7 +38,7 @@ const SECTIONS: PolicySection[] = [
     blocks: [
       {
         type: "paragraph",
-        text: 'This Privacy Policy explains how Video Downloader ("we", "us") handles information when you use our website and online video downloading service. The service is designed to work without registration: you do not need to create an account or sign in to use it. By using the service, you agree to the practices described in this policy.',
+        text: 'This Privacy Policy explains how Vidsavey ("we", "us") handles information when you use our website and online video downloading service. The service is designed to work without registration: you do not need to create an account or sign in to use it. By using the service, you agree to the practices described in this policy.',
       },
     ],
   },
@@ -220,14 +231,17 @@ export default function PrivacyPolicyPage() {
     <div className="flex min-h-screen flex-col bg-white text-slate-900">
       {/* Header */}
       <header className="border-b border-slate-100 bg-white">
-        <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-6">
+        <div className="mx-auto flex h-[72px] max-w-[1200px] items-center justify-between px-8">
           <Link href="/" className="flex items-center gap-2.5">
-            <span
-              aria-hidden="true"
-              className="h-2.5 w-2.5 rounded-md bg-blue-600"
+            <img
+              src="/vidsavey-logo.png"
+              alt="Vidsavey"
+              width={32}
+              height={32}
+              className="h-8 w-8 shrink-0 object-contain"
             />
-            <span className="text-lg font-bold tracking-tight text-slate-900">
-              Video Downloader
+            <span className="text-[22px] font-bold tracking-tight text-slate-900">
+              Vidsavey
             </span>
           </Link>
 
@@ -273,7 +287,7 @@ export default function PrivacyPolicyPage() {
       {/* Footer */}
       <footer className="border-t border-slate-100 bg-white">
         <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-3 px-6 py-10 text-sm text-slate-500 sm:flex-row">
-          <p>© 2026 Video Downloader. All rights reserved.</p>
+          <p>© 2026 Vidsavey. All rights reserved.</p>
 
           <Link href="/" className="transition hover:text-slate-900">
             Home

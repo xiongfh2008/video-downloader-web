@@ -85,7 +85,24 @@ const FILE_API_BASE_URL = `${API_BASE_URL}/api/video/file`;
 const DOWNLOAD_POLL_INTERVAL_MS = 1000;
 const DOWNLOAD_POLL_TIMEOUT_MS = 60 * 60 * 1000;
 
-const platforms = ["YouTube", "TikTok", "Instagram", "Facebook", "X"] as const;
+// 基于 yt-dlp 支持站点列表精选的主流平台（https://github.com/yt-dlp/yt-dlp）
+const platforms = [
+  "YouTube",
+  "TikTok",
+  "Instagram",
+  "Facebook",
+  "X",
+  "Twitch",
+  "Reddit",
+  "Vimeo",
+  "Dailymotion",
+  "Bilibili",
+  "SoundCloud",
+  "Pinterest",
+  "Rumble",
+  "Douyin",
+  "Weibo",
+] as const;
 
 const howItWorks = [
   {
@@ -132,7 +149,7 @@ const faqItems = [
   {
     question: "Which video platforms are supported?",
     answer:
-      "Vidsavey supports popular video platforms including YouTube, TikTok, Instagram, Facebook and X. Availability may vary by individual video.",
+      "Vidsavey supports popular video platforms including YouTube, TikTok, Instagram, Facebook, X, Twitch, Reddit, Vimeo, Dailymotion, Bilibili and hundreds more sites powered by yt-dlp. Availability may vary by individual video.",
   },
   {
     question: "Can I download MP3 audio?",
@@ -364,6 +381,16 @@ function PlatformBadge({ name }: { name: (typeof platforms)[number] }) {
     Instagram: "#ec4899",
     Facebook: "#2563eb",
     X: "#0f172a",
+    Twitch: "#9146ff",
+    Reddit: "#ff4500",
+    Vimeo: "#1ab7ea",
+    Dailymotion: "#2563eb",
+    Bilibili: "#fb7299",
+    SoundCloud: "#ff7700",
+    Pinterest: "#e60023",
+    Rumble: "#85c742",
+    Douyin: "#161823",
+    Weibo: "#e6162d",
   };
 
   const letters: Record<(typeof platforms)[number], string> = {
@@ -372,6 +399,16 @@ function PlatformBadge({ name }: { name: (typeof platforms)[number] }) {
     Instagram: "◎",
     Facebook: "f",
     X: "X",
+    Twitch: "T",
+    Reddit: "r",
+    Vimeo: "V",
+    Dailymotion: "d",
+    Bilibili: "B",
+    SoundCloud: "S",
+    Pinterest: "P",
+    Rumble: "R",
+    Douyin: "D",
+    Weibo: "W",
   };
 
   return (
@@ -814,7 +851,7 @@ export default function Home() {
             <div className="vs-hero-platforms">
               <p>Supports popular video platforms</p>
               <div className="vs-platform-list">
-                {platforms.map((platform) => (
+                {platforms.slice(0, 5).map((platform) => (
                   <PlatformBadge key={platform} name={platform} />
                 ))}
               </div>
@@ -1071,13 +1108,19 @@ export default function Home() {
           <div className="vs-section-inner vs-section-inner-narrow">
             <div className="vs-section-heading">
               <h2>Supported Platforms</h2>
-              <p>Vidsavey works with the most popular video platforms.</p>
+              <p>
+                Powered by yt-dlp, Vidsavey supports 1000+ video sites. These
+                are the most popular ones:
+              </p>
             </div>
             <div className="vs-platform-list vs-platform-list-large">
               {platforms.map((platform) => (
                 <PlatformBadge key={platform} name={platform} />
               ))}
             </div>
+            <p className="mt-4 text-center text-sm text-slate-500">
+              ...and hundreds more sites supported by yt-dlp.
+            </p>
           </div>
         </section>
 
