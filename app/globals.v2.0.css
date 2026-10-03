@@ -68,16 +68,13 @@ select {
 .vs-brand {
   display: inline-flex;
   align-items: center;
+  gap: 10px;
   flex: 0 0 auto;
-  line-height: 0;
-}
-
-.vs-brand-logo {
-  display: block;
-  width: 132px;
-  height: 34px;
-  object-fit: contain;
-  object-position: left center;
+  font-size: 20px;
+  line-height: 1;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  color: #0f172a;
 }
 
 .vs-nav {
@@ -706,12 +703,5 @@ select {
     padding: 24px 0;
     flex-direction: column;
     justify-content: center;
-  }
-}
-
-@media (max-width: 640px) {
-  .vs-brand-logo {
-    width: 118px;
-    height: 30px;
   }
 }

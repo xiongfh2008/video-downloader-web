@@ -721,17 +721,9 @@ export default function Home() {
     <div className="vs-page">
       <header className="vs-header">
         <div className="vs-header-inner">
-          <Link href="/" className="flex items-center gap-2.5">
-            <img
-              src="/vidsavey-logo.png"
-              alt="Vidsavey"
-              width={32}
-              height={32}
-              className="h-8 w-8 shrink-0 object-contain"
-            />
-            <span className="text-[22px] font-bold tracking-tight text-slate-900">
-              Vidsavey
-            </span>
+          <Link href="/" className="vs-brand" aria-label="Vidsavey home">
+            <BrandMark />
+            <span>Vidsavey</span>
           </Link>
 
           <nav className="vs-nav" aria-label="Primary navigation">
