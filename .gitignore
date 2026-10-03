@@ -39,3 +39,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+/dist/
+.vinext/
+.cloudflare/
+
+# Cloudflare local state
+.wrangler/
+
+# Local page backup
+app/pagev1.0.tsx
