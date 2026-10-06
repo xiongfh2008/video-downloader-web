@@ -2,6 +2,13 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import {
+  DEFAULT_LANG,
+  LANG_NAMES,
+  LANGS,
+  type Dictionary,
+  type Lang,
+} from "../app/i18n";
 
 type AnalyzeStatus = "idle" | "loading" | "success" | "error";
 type SubtitleType = "manual" | "automatic";
@@ -85,6 +92,11 @@ const FILE_API_BASE_URL = `${API_BASE_URL}/api/video/file`;
 const DOWNLOAD_POLL_INTERVAL_MS = 1000;
 const DOWNLOAD_POLL_TIMEOUT_MS = 60 * 60 * 1000;
 
+// YouTube 反机器人验证发生在后端与 YouTube 之间（绑定服务器出口 IP，用户浏览器无法代为通过）。
+// 后端暂无专门错误码，这里按服务端消息特征识别，展示指导性文案并引导用户稍后重试。
+const BOT_CHECK_PATTERN =
+  /sign in to confirm|not a bot|are you a robot|captcha/i;
+
 // 基于 yt-dlp 支持站点列表精选的主流平台（https://github.com/yt-dlp/yt-dlp）
 const platforms = [
   "YouTube",
@@ -104,96 +116,12 @@ const platforms = [
   "Weibo",
 ] as const;
 
-const howItWorks = [
-  {
-    title: "Paste URL",
-    description: "Copy the video link and paste it into the input box above.",
-    icon: "link",
-  },
-  {
-    title: "Analyze Video",
-    description: "Click Analyze and the video details will be fetched for you.",
-    icon: "search",
-  },
-  {
-    title: "Download File",
-    description: "Choose MP4, MP3 or subtitles and save the file to your device.",
-    icon: "download",
-  },
-] as const;
-
-const features = [
-  {
-    title: "Fast Download",
-    description: "Quickly process your video.",
-    icon: "bolt",
-  },
-  {
-    title: "Simple & Easy",
-    description: "No complicated settings.",
-    icon: "shield",
-  },
-  {
-    title: "Mobile Friendly",
-    description: "Works on desktop and mobile.",
-    icon: "phone",
-  },
-] as const;
-
-const faqItems = [
-  {
-    question: "Is Vidsavey free?",
-    answer:
-      "Yes. Vidsavey is a free online tool. You can analyze and download supported videos without creating an account.",
-  },
-  {
-    question: "Which video platforms are supported?",
-    answer:
-      "Vidsavey supports popular video platforms including YouTube, TikTok, Instagram, Facebook, X, Twitch, Reddit, Vimeo, Dailymotion, Bilibili and hundreds more sites powered by yt-dlp. Availability may vary by individual video.",
-  },
-  {
-    question: "Can I download MP3 audio?",
-    answer:
-      "Yes. After analyzing a video, select MP3 to download the audio track when the source is available.",
-  },
-  {
-    question: "Can I download subtitles?",
-    answer:
-      "Yes. When subtitles are available, choose Subtitles, select a language and track type, then download VTT or SRT.",
-  },
-  {
-    question: "Do I need to install any software?",
-    answer:
-      "No. Vidsavey runs in your browser. Paste a supported video URL, analyze it, and download the available format.",
-  },
-] as const;
+// 图标属于数据而非文案，文案（title/description）来自 dict.guideSteps / dict.features
+const guideStepIcons = ["link", "search", "download"] as const;
+const featureIcons = ["bolt", "shield", "phone"] as const;
 
 // SEO / GEO：结构化数据（WebApplication + FAQPage），随 SSR 输出到首屏 HTML
 const SITE_URL = "https://vidsavey.com";
-
-const jsonLd = {
-  "@context": "https://schema.org",
-  "@graph": [
-    {
-      "@type": "WebApplication",
-      name: "Vidsavey",
-      url: SITE_URL,
-      applicationCategory: "MultimediaApplication",
-      operatingSystem: "Any",
-      description:
-        "Vidsavey is a free online video downloader. Paste a video URL to download supported videos as MP4 or MP3, plus available subtitles.",
-      offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
-    },
-    {
-      "@type": "FAQPage",
-      mainEntity: faqItems.map((item) => ({
-        "@type": "Question",
-        name: item.question,
-        acceptedAnswer: { "@type": "Answer", text: item.answer },
-      })),
-    },
-  ],
-};
 
 function formatDuration(seconds: number) {
   const hours = Math.floor(seconds / 3600);
@@ -238,55 +166,65 @@ function getFriendlyErrorMessage(
   code: string | null | undefined,
   serverMessage: string | null | undefined,
   fallback: string,
+  errors: Dictionary["errors"],
 ) {
+  // 优先按消息特征识别 YouTube 反机器人验证，覆盖任何错误码（含 default 兜底透传原文的场景）。
+  if (serverMessage && BOT_CHECK_PATTERN.test(serverMessage)) {
+    return errors.botCheck;
+  }
+
   switch (code) {
     case "invalid_url":
-      return serverMessage || "Please enter a valid public video URL.";
+      return serverMessage || errors.invalidPublicUrl;
     case "rate_limited":
-      return "Too many requests. Please wait a moment and try again.";
+      return errors.rateLimited;
     case "too_many_active_tasks":
-      return "You already have too many active downloads. Please wait for one to finish.";
+      return errors.tooManyActiveTasks;
     case "queue_full":
-      return "The server is busy right now. Please try again shortly.";
+      return errors.queueFull;
     case "storage_busy":
-      return "The server is temporarily low on storage. Please try again later.";
+      return errors.storageBusy;
     case "video_too_long":
-      return "This video is longer than the supported limit.";
+      return errors.videoTooLong;
     case "video_too_large":
-      return "This video is larger than the supported download limit.";
+      return errors.videoTooLarge;
     case "source_unavailable":
-      return "This video is unavailable or cannot be accessed.";
+      return errors.sourceUnavailable;
     case "subtitle_not_found":
-      return "The selected subtitle could not be downloaded.";
+      return errors.subtitleNotFound;
     case "file_expired":
-      return "This download has expired. Please create a new download.";
+      return errors.fileExpired;
     case "service_restarted":
-      return "The download was interrupted by a server restart. Please try again.";
+      return errors.serviceRestarted;
     case "download_failed":
-      return "Unable to download this video. Please try again.";
+      return errors.downloadVideoFailed;
     case "internal_error":
-      return "The server encountered an unexpected error. Please try again.";
+      return errors.internalError;
     default:
       return serverMessage || fallback;
   }
 }
 
-function getDownloadStatusLabel(status: DownloadTaskStatus, progress: number) {
+function getDownloadStatusLabel(
+  status: DownloadTaskStatus,
+  progress: number,
+  labels: Dictionary["result"]["status"],
+) {
   switch (status) {
     case "queued":
-      return "Queued";
+      return labels.queued;
     case "preparing":
-      return "Preparing";
+      return labels.preparing;
     case "downloading":
-      return `Downloading ${progress}%`;
+      return `${labels.downloading} ${progress}%`;
     case "processing":
-      return "Processing";
+      return labels.processing;
     case "success":
-      return "Download started";
+      return labels.success;
     case "failed":
-      return "Failed";
+      return labels.failed;
     case "expired":
-      return "Expired";
+      return labels.expired;
     default:
       return "";
   }
@@ -452,7 +390,71 @@ function PlatformBadge({ name }: { name: (typeof platforms)[number] }) {
   );
 }
 
-export default function Home() {
+// 语言切换：下拉菜单（地球图标 + 当前语言代码），菜单项显示各语言自称。
+// 打开时渲染一层全屏透明遮罩，点击遮罩或选项即关闭，无需全局事件监听。
+function LangSwitch({ lang, ariaLabel }: { lang: Lang; ariaLabel: string }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="vs-lang-switch">
+      <button
+        type="button"
+        className="vs-lang-trigger"
+        aria-label={ariaLabel}
+        aria-haspopup="true"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <svg
+          viewBox="0 0 24 24"
+          width={16}
+          height={16}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.9}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <circle cx="12" cy="12" r="8.5" />
+          <path d="M3.5 12h17" />
+          <path d="M12 3.5c2.8 2.7 2.8 14.3 0 17-2.8-2.7-2.8-14.3 0-17Z" />
+        </svg>
+        <span>{lang.toUpperCase()}</span>
+        <span className="vs-lang-chevron" aria-hidden="true">
+          ⌄
+        </span>
+      </button>
+
+      {open && (
+        <>
+          <button
+            type="button"
+            className="vs-lang-overlay"
+            aria-hidden="true"
+            tabIndex={-1}
+            onClick={() => setOpen(false)}
+          />
+          <ul className="vs-lang-menu">
+            {LANGS.map((l) => (
+              <li key={l}>
+                <Link
+                  href={l === DEFAULT_LANG ? "/" : `/${l}`}
+                  aria-current={lang === l ? "page" : undefined}
+                  onClick={() => setOpen(false)}
+                >
+                  {LANG_NAMES[l]}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </div>
+  );
+}
+
+export function HomeView({ lang, dict }: { lang: Lang; dict: Dictionary }) {
   const [url, setUrl] = useState("");
   const [downloadMode, setDownloadMode] = useState<DownloadMode>("mp4");
   const [subtitleLanguage, setSubtitleLanguage] = useState("");
@@ -468,6 +470,33 @@ export default function Home() {
     useState<DownloadTaskStatus>("idle");
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [subtitleSearch, setSubtitleSearch] = useState("");
+
+  // SEO / GEO：结构化数据（WebApplication + FAQPage），随 SSR 输出到首屏 HTML
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebApplication",
+        name: "Vidsavey",
+        url: SITE_URL,
+        applicationCategory: "MultimediaApplication",
+        operatingSystem: "Any",
+        inLanguage: lang,
+        description:
+          "Vidsavey is a free online video downloader. Paste a video URL to download supported videos as MP4 or MP3, plus available subtitles.",
+        offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+      },
+      {
+        "@type": "FAQPage",
+        inLanguage: lang,
+        mainEntity: dict.faq.map((item) => ({
+          "@type": "Question",
+          name: item.question,
+          acceptedAnswer: { "@type": "Answer", text: item.answer },
+        })),
+      },
+    ],
+  };
 
   const subtitleTracks = videoInfo?.subtitles?.tracks ?? [];
   const subtitlesAvailable =
@@ -540,7 +569,7 @@ export default function Home() {
     const trimmedUrl = url.trim();
     if (trimmedUrl === "") {
       setAnalyzeStatus("error");
-      setErrorMessage("Please enter a video URL.");
+      setErrorMessage(dict.errors.emptyUrl);
       return;
     }
 
@@ -548,7 +577,7 @@ export default function Home() {
       new URL(trimmedUrl);
     } catch {
       setAnalyzeStatus("error");
-      setErrorMessage("Please enter a valid URL.");
+      setErrorMessage(dict.errors.invalidUrl);
       return;
     }
 
@@ -579,7 +608,8 @@ export default function Home() {
           getFriendlyErrorMessage(
             apiError.code,
             apiError.message,
-            "Unable to analyze this video. Please try again.",
+            dict.errors.analyzeFailed,
+            dict.errors,
           ),
         );
         return;
@@ -588,7 +618,7 @@ export default function Home() {
       const result: VideoInfoResponse = await response.json();
       if (!result.success) {
         setAnalyzeStatus("error");
-        setErrorMessage("Unable to analyze this video. Please try again.");
+        setErrorMessage(dict.errors.analyzeFailed);
         return;
       }
 
@@ -612,7 +642,7 @@ export default function Home() {
       }
     } catch {
       setAnalyzeStatus("error");
-      setErrorMessage("Unable to analyze this video. Please try again.");
+      setErrorMessage(dict.errors.analyzeFailed);
     }
   };
 
@@ -655,7 +685,7 @@ export default function Home() {
         track.formats.length === 0 ||
         (subtitleFormat === "vtt" && !track.formats.includes("vtt"))
       ) {
-        setDownloadError("Please select a subtitle option.");
+        setDownloadError(dict.errors.selectSubtitle);
         return;
       }
     }
@@ -687,16 +717,15 @@ export default function Home() {
           getFriendlyErrorMessage(
             apiError.code,
             apiError.message,
-            "Unable to start this download. Please try again.",
+            dict.errors.downloadStartFailed,
+            dict.errors,
           ),
         );
       }
 
       const created: DownloadCreateResponse = await response.json();
       if (!created.success || !created.task_id) {
-        throw new UserFacingError(
-          "Unable to start this download. Please try again.",
-        );
+        throw new UserFacingError(dict.errors.downloadStartFailed);
       }
 
       const deadline = Date.now() + DOWNLOAD_POLL_TIMEOUT_MS;
@@ -714,9 +743,7 @@ export default function Home() {
         } catch {
           consecutivePollingErrors += 1;
           if (consecutivePollingErrors <= 3) continue;
-          throw new UserFacingError(
-            "Connection to the server was lost. Please try again.",
-          );
+          throw new UserFacingError(dict.errors.connectionLost);
         }
 
         if (!taskResponse.ok) {
@@ -725,7 +752,8 @@ export default function Home() {
             getFriendlyErrorMessage(
               apiError.code,
               apiError.message,
-              "Unable to check download progress. Please try again.",
+              dict.errors.progressCheckFailed,
+              dict.errors,
             ),
           );
         }
@@ -760,21 +788,20 @@ export default function Home() {
             getFriendlyErrorMessage(
               task.error_code,
               task.error_message,
-              "Unable to download this file. Please try again.",
+              dict.errors.downloadFailed,
+              dict.errors,
             ),
           );
         }
       }
 
-      throw new UserFacingError(
-        "The download is taking longer than expected. Please try again.",
-      );
+      throw new UserFacingError(dict.errors.downloadTimeout);
     } catch (error) {
       setDownloadStatus("failed");
       if (error instanceof UserFacingError) {
         setDownloadError(error.message);
       } else {
-        setDownloadError("Unable to download this file. Please try again.");
+        setDownloadError(dict.errors.downloadFailed);
       }
     } finally {
       setIsDownloading(false);
@@ -785,7 +812,10 @@ export default function Home() {
     <div className="vs-page">
       <header className="vs-header">
         <div className="vs-header-inner">
-          <Link href="/" className="flex items-center gap-2.5">
+          <Link
+            href={lang === DEFAULT_LANG ? "/" : `/${lang}`}
+            className="flex items-center gap-2.5"
+          >
             <img
               src="/vidsavey-logo.png"
               alt="Vidsavey"
@@ -798,17 +828,20 @@ export default function Home() {
             </span>
           </Link>
 
-          <nav className="vs-nav" aria-label="Primary navigation">
-            <a href="#guide">Guide</a>
-            <a href="#platforms">Supported Platforms</a>
-            <a href="#faq">FAQ</a>
-            <Link href="/privacy">Privacy</Link>
-            <Link href="/terms">Terms</Link>
+          <nav className="vs-nav" aria-label={dict.nav.primaryAriaLabel}>
+            <a href="#guide">{dict.nav.guide}</a>
+            <a href="#platforms">{dict.nav.platforms}</a>
+            <a href="#faq">{dict.nav.faq}</a>
+            <Link href="/privacy">{dict.nav.privacy}</Link>
+            <Link href="/terms">{dict.nav.terms}</Link>
           </nav>
 
-          <a href="#features" className="vs-fast-link">
-            Fast &amp; Simple
-          </a>
+          <div className="vs-header-actions">
+            <a href="#features" className="vs-fast-link">
+              {dict.nav.fastLink}
+            </a>
+            <LangSwitch lang={lang} ariaLabel={dict.nav.langAriaLabel} />
+          </div>
         </div>
       </header>
 
@@ -818,16 +851,14 @@ export default function Home() {
           <div className="vs-hero-glow vs-hero-glow-right" aria-hidden="true" />
 
           <div className="vs-hero-inner">
-            <span className="vs-eyebrow">Free Online Video Downloader</span>
+            <span className="vs-eyebrow">{dict.hero.badge}</span>
 
             <h1 className="vs-hero-title">
-              <span>Download Videos</span>
-              <strong>Quickly and Easily</strong>
+              <span>{dict.hero.titleLine1}</span>
+              <strong>{dict.hero.titleLine2}</strong>
             </h1>
 
-            <p className="vs-hero-subtitle">
-              Paste a video URL and download your favorite videos in seconds.
-            </p>
+            <p className="vs-hero-subtitle">{dict.hero.subtitle}</p>
 
             <div className="vs-analyze-wrap">
               <div className="vs-analyze-box">
@@ -846,8 +877,8 @@ export default function Home() {
                     onKeyDown={(e) => {
                       if (e.key === "Enter") void handleAnalyze();
                     }}
-                    placeholder="Paste video URL here..."
-                    aria-label="Video URL"
+                    placeholder={dict.hero.urlPlaceholder}
+                    aria-label={dict.hero.urlAriaLabel}
                   />
                 </div>
 
@@ -860,11 +891,11 @@ export default function Home() {
                   {analyzeStatus === "loading" ? (
                     <>
                       <span className="vs-spinner" aria-hidden="true" />
-                      Analyzing...
+                      {dict.analyze.analyzing}
                     </>
                   ) : (
                     <>
-                      Analyze <span aria-hidden="true">→</span>
+                      {dict.analyze.button} <span aria-hidden="true">→</span>
                     </>
                   )}
                 </button>
@@ -876,7 +907,7 @@ export default function Home() {
             </div>
 
             <div className="vs-hero-platforms">
-              <p>Supports popular video platforms</p>
+              <p>{dict.hero.supportedPlatforms}</p>
               <div className="vs-platform-list">
                 {platforms.slice(0, 5).map((platform) => (
                   <PlatformBadge key={platform} name={platform} />
@@ -892,7 +923,7 @@ export default function Home() {
               <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_18px_50px_rgba(15,23,42,0.07)] sm:p-7">
                 <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                  Ready to download
+                  {dict.result.ready}
                 </div>
 
                 <div className="mt-5 flex flex-col gap-5 sm:flex-row sm:gap-6">
@@ -905,7 +936,7 @@ export default function Home() {
                     />
                   ) : (
                     <div className="flex aspect-video w-full shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-sm text-slate-400 sm:w-64">
-                      Video Thumbnail
+                      {dict.result.thumbnailFallback}
                     </div>
                   )}
 
@@ -915,23 +946,23 @@ export default function Home() {
                     </h2>
                     <div className="mt-4 space-y-1.5 text-sm text-slate-500">
                       <p>
-                        Uploader: <span className="font-medium text-slate-700">{videoInfo?.uploader}</span>
+                        {dict.result.uploaderLabel} <span className="font-medium text-slate-700">{videoInfo?.uploader}</span>
                       </p>
                       <p>
-                        Duration: <span className="font-medium text-slate-700">{formatDuration(videoInfo?.duration ?? 0)}</span>
+                        {dict.result.durationLabel} <span className="font-medium text-slate-700">{formatDuration(videoInfo?.duration ?? 0)}</span>
                       </p>
                     </div>
                   </div>
                 </div>
 
                 <div className="mt-7 border-t border-slate-100 pt-6">
-                  <p className="mb-3 text-sm font-semibold text-slate-700">Format</p>
+                  <p className="mb-3 text-sm font-semibold text-slate-700">{dict.result.formatLabel}</p>
                   <div className="grid grid-cols-3 gap-2 sm:flex sm:gap-3">
                     {(["mp4", "mp3", "subtitles"] as DownloadMode[]).map((mode) => {
                       const disabled = mode === "subtitles" && !subtitlesAvailable;
                       const active = downloadMode === mode;
-                      const label = mode === "mp4" ? "MP4" : mode === "mp3" ? "MP3" : "Subtitles";
-                      const sub = mode === "mp4" ? "Video" : mode === "mp3" ? "Audio" : "Captions";
+                      const label = dict.result.modeLabels[mode];
+                      const sub = dict.result.modeSubLabels[mode];
 
                       return (
                         <button
@@ -954,7 +985,7 @@ export default function Home() {
                   </div>
 
                   {!subtitlesAvailable && (
-                    <p className="mt-3 text-sm text-slate-500">No subtitles are available for this video.</p>
+                    <p className="mt-3 text-sm text-slate-500">{dict.result.noSubtitles}</p>
                   )}
                 </div>
 
@@ -962,14 +993,14 @@ export default function Home() {
                   <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
                     <div>
                       <label htmlFor="subtitle-language" className="mb-2 block text-sm font-semibold text-slate-700">
-                        Language
+                        {dict.result.languageLabel}
                       </label>
                       {languageOptions.length > 12 && (
                         <input
                           type="search"
                           value={subtitleSearch}
                           onChange={(e) => setSubtitleSearch(e.target.value)}
-                          placeholder="Search language..."
+                          placeholder={dict.result.searchLanguagePlaceholder}
                           className="mb-2 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-500/20"
                         />
                       )}
@@ -989,7 +1020,7 @@ export default function Home() {
                     </div>
 
                     <div className="mt-4">
-                      <p className="mb-2 text-sm font-semibold text-slate-700">Type</p>
+                      <p className="mb-2 text-sm font-semibold text-slate-700">{dict.result.typeLabel}</p>
                       <div className="flex flex-wrap gap-2 sm:gap-3">
                         {availableTypes.map((type) => (
                           <button
@@ -1003,14 +1034,14 @@ export default function Home() {
                                 : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
                             }`}
                           >
-                            {type === "manual" ? "Manual" : "Auto-generated"}
+                            {dict.result.typeLabels[type]}
                           </button>
                         ))}
                       </div>
                     </div>
 
                     <div className="mt-4">
-                      <p className="mb-2 text-sm font-semibold text-slate-700">Format</p>
+                      <p className="mb-2 text-sm font-semibold text-slate-700">{dict.result.formatLabel}</p>
                       <div className="flex flex-wrap gap-2 sm:gap-3">
                         <button
                           type="button"
@@ -1023,7 +1054,7 @@ export default function Home() {
                               : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
                           } disabled:cursor-not-allowed disabled:opacity-50`}
                         >
-                          VTT
+                          {dict.result.subtitleFormatLabels.vtt}
                         </button>
                         <button
                           type="button"
@@ -1036,7 +1067,7 @@ export default function Home() {
                               : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
                           } disabled:cursor-not-allowed disabled:opacity-50`}
                         >
-                          SRT
+                          {dict.result.subtitleFormatLabels.srt}
                         </button>
                       </div>
                     </div>
@@ -1052,10 +1083,10 @@ export default function Home() {
                   {isDownloading ? (
                     <>
                       <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-                      {getDownloadStatusLabel(downloadStatus, downloadProgress)}
+                      {getDownloadStatusLabel(downloadStatus, downloadProgress, dict.result.status)}
                     </>
                   ) : (
-                    `Download ${
+                    `${dict.result.downloadLabel} ${
                       downloadMode === "subtitles"
                         ? subtitleFormat.toUpperCase()
                         : downloadMode.toUpperCase()
@@ -1066,7 +1097,7 @@ export default function Home() {
                 {isDownloading && (
                   <div className="mt-3" aria-live="polite">
                     <div className="mb-1.5 flex items-center justify-between text-xs font-medium text-slate-500">
-                      <span>{getDownloadStatusLabel(downloadStatus, downloadProgress)}</span>
+                      <span>{getDownloadStatusLabel(downloadStatus, downloadProgress, dict.result.status)}</span>
                       <span>{downloadProgress}%</span>
                     </div>
                     <div className="h-2 overflow-hidden rounded-full bg-slate-100">
@@ -1079,7 +1110,7 @@ export default function Home() {
                 )}
 
                 {downloadStatus === "success" && !isDownloading && !downloadError && (
-                  <p className="mt-3 text-sm font-medium text-emerald-600">Download started.</p>
+                  <p className="mt-3 text-sm font-medium text-emerald-600">{dict.result.downloadStarted}</p>
                 )}
 
                 {downloadError && <p className="mt-3 text-sm text-red-600">{downloadError}</p>}
@@ -1091,16 +1122,16 @@ export default function Home() {
         <section id="guide" className="vs-section vs-guide-section">
           <div className="vs-section-inner">
             <div className="vs-section-heading">
-              <h2>How It Works</h2>
-              <p>Three steps to save your video.</p>
+              <h2>{dict.sections.guide.heading}</h2>
+              <p>{dict.sections.guide.subheading}</p>
             </div>
 
             <div className="vs-card-grid">
-              {howItWorks.map((step, index) => (
+              {dict.guideSteps.map((step, index) => (
                 <article key={step.title} className="vs-guide-card">
                   <div className="vs-card-topline">
                     <span className="vs-step-number">{index + 1}</span>
-                    <span className="vs-card-icon"><SimpleIcon name={step.icon} /></span>
+                    <span className="vs-card-icon"><SimpleIcon name={guideStepIcons[index]} /></span>
                   </div>
                   <h3>{step.title}</h3>
                   <p>{step.description}</p>
@@ -1113,14 +1144,14 @@ export default function Home() {
         <section id="features" className="vs-section vs-features-section">
           <div className="vs-section-inner">
             <div className="vs-section-heading">
-              <h2>Why Vidsavey?</h2>
-              <p>A simple tool that gets your videos saved.</p>
+              <h2>{dict.sections.features.heading}</h2>
+              <p>{dict.sections.features.subheading}</p>
             </div>
 
             <div className="vs-card-grid">
-              {features.map((feature) => (
+              {dict.features.map((feature, index) => (
                 <article key={feature.title} className="vs-feature-card">
-                  <span className="vs-feature-icon"><SimpleIcon name={feature.icon} /></span>
+                  <span className="vs-feature-icon"><SimpleIcon name={featureIcons[index]} /></span>
                   <div>
                     <h3>{feature.title}</h3>
                     <p>{feature.description}</p>
@@ -1134,10 +1165,9 @@ export default function Home() {
         <section id="platforms" className="vs-section vs-platform-section">
           <div className="vs-section-inner vs-section-inner-narrow">
             <div className="vs-section-heading">
-              <h2>Supported Platforms</h2>
+              <h2>{dict.sections.platforms.heading}</h2>
               <p>
-                Powered by yt-dlp, Vidsavey supports 1000+ video sites. These
-                are the most popular ones:
+                {dict.sections.platforms.description}
               </p>
             </div>
             <div className="vs-platform-list vs-platform-list-large">
@@ -1146,7 +1176,7 @@ export default function Home() {
               ))}
             </div>
             <p className="mt-4 text-center text-sm text-slate-500">
-              ...and hundreds more sites supported by yt-dlp.
+              {dict.sections.platforms.more}
             </p>
           </div>
         </section>
@@ -1154,12 +1184,12 @@ export default function Home() {
         <section id="faq" className="vs-section vs-faq-section">
           <div className="vs-faq-inner">
             <div className="vs-section-heading">
-              <h2>Frequently Asked Questions</h2>
-              <p>Everything you need to know about Vidsavey.</p>
+              <h2>{dict.sections.faq.heading}</h2>
+              <p>{dict.sections.faq.subheading}</p>
             </div>
 
             <div className="vs-faq-list">
-              {faqItems.map((item) => (
+              {dict.faq.map((item) => (
                 <details key={item.question}>
                   <summary>
                     <span>{item.question}</span>
@@ -1175,10 +1205,10 @@ export default function Home() {
 
       <footer className="vs-footer">
         <div className="vs-footer-inner">
-          <p>© 2026 Vidsavey. All rights reserved.</p>
+          <p>{dict.footer.copyright}</p>
           <div>
-            <Link href="/privacy">Privacy</Link>
-            <Link href="/terms">Terms</Link>
+            <Link href="/privacy">{dict.footer.privacy}</Link>
+            <Link href="/terms">{dict.footer.terms}</Link>
           </div>
         </div>
       </footer>

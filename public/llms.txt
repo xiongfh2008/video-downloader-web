@@ -2,18 +2,35 @@
 
 > Vidsavey is a free online video downloader. Paste a video URL to analyze it, then download the video as MP4, the audio as MP3, or available subtitles — directly in the browser, with no account and no software installation.
 
-Vidsavey supports popular platforms including YouTube, TikTok, Instagram, Facebook, X, Twitch, Reddit, Vimeo, Dailymotion, Bilibili and hundreds more sites powered by yt-dlp. Availability may vary by individual video.
+Vidsavey supports popular platforms including YouTube, TikTok, Instagram, Facebook, X, Twitch, Reddit, Vimeo, Dailymotion, Bilibili, SoundCloud, Pinterest, Rumble, Douyin, Weibo and more video sites. Availability may vary by individual video.
 
 ## Pages
 
 - [Home](https://vidsavey.com): Free online video downloader (MP4 / MP3 / subtitles)
+- [Spanish](https://vidsavey.com/es): Descargador de videos en línea gratis (MP4 / MP3 / subtítulos)
+- [Portuguese](https://vidsavey.com/pt): Baixador de vídeos online grátis (MP4 / MP3 / legendas)
+- [French](https://vidsavey.com/fr): Téléchargeur de vidéos en ligne gratuit (MP4 / MP3 / sous-titres)
+- [German](https://vidsavey.com/de): Kostenloser Online-Video-Downloader (MP4 / MP3 / Untertitel)
+- [Italian](https://vidsavey.com/it): Scaricatore di video online gratuito (MP4 / MP3 / sottotitoli)
+- [Russian](https://vidsavey.com/ru): Бесплатный онлайн-загрузчик видео (MP4 / MP3 / субтитры)
+- [Indonesian](https://vidsavey.com/id): Pengunduh video online gratis (MP4 / MP3 / subtitle)
+- [Japanese](https://vidsavey.com/ja): 無料のオンライン動画ダウンローダー（MP4 / MP3 / 字幕）
+- [Korean](https://vidsavey.com/ko): 무료 온라인 동영상 다운로더 (MP4 / MP3 / 자막)
+- [Vietnamese](https://vidsavey.com/vi): Trình tải video trực tuyến miễn phí (MP4 / MP3 / phụ đề)
+- [Thai](https://vidsavey.com/th): ตัวดาวน์โหลดวิดีโอออนไลน์ฟรี (MP4 / MP3 / ซับไตเติล)
+- [Turkish](https://vidsavey.com/tr): Ücretsiz çevrimiçi video indirici (MP4 / MP3 / altyazı)
+- [Chinese](https://vidsavey.com/zh): 免费在线视频下载器（MP4 / MP3 / 字幕）
+- [Hindi](https://vidsavey.com/hi): मुफ्त ऑनलाइन वीडियो डाउनलोडर (MP4 / MP3 / सबटाइटल)
+- [Arabic](https://vidsavey.com/ar): أداة تحميل فيديو مجانية عبر الإنترنت (MP4 / MP3 / ترجمات)
+- [Dutch](https://vidsavey.com/nl): Gratis online video-downloader (MP4 / MP3 / ondertitels)
+- [Polish](https://vidsavey.com/pl): Darmowy internetowy pobieracz wideo (MP4 / MP3 / napisy)
 - [Privacy Policy](https://vidsavey.com/privacy): How Vidsavey handles information
 - [Terms of Service](https://vidsavey.com/terms): Terms and conditions for using Vidsavey
 
 ## FAQ
 
 - Is Vidsavey free? Yes, no account required.
-- Which platforms are supported? YouTube, TikTok, Instagram, Facebook, X and hundreds more via yt-dlp.
+- Which platforms are supported? YouTube, TikTok, Instagram, Facebook, X, Twitch, Reddit, Vimeo, Dailymotion, Bilibili and more video sites.
 - Can I download MP3 audio? Yes, when the source provides an audio track.
 - Can I download subtitles? Yes, VTT or SRT when available.
 - Do I need to install software? No, Vidsavey runs entirely in the browser.
