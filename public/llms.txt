@@ -1,0 +1,19 @@
+# Vidsavey
+
+> Vidsavey is a free online video downloader. Paste a video URL to analyze it, then download the video as MP4, the audio as MP3, or available subtitles — directly in the browser, with no account and no software installation.
+
+Vidsavey supports popular platforms including YouTube, TikTok, Instagram, Facebook, X, Twitch, Reddit, Vimeo, Dailymotion, Bilibili and hundreds more sites powered by yt-dlp. Availability may vary by individual video.
+
+## Pages
+
+- [Home](https://vidsavey.com): Free online video downloader (MP4 / MP3 / subtitles)
+- [Privacy Policy](https://vidsavey.com/privacy): How Vidsavey handles information
+- [Terms of Service](https://vidsavey.com/terms): Terms and conditions for using Vidsavey
+
+## FAQ
+
+- Is Vidsavey free? Yes, no account required.
+- Which platforms are supported? YouTube, TikTok, Instagram, Facebook, X and hundreds more via yt-dlp.
+- Can I download MP3 audio? Yes, when the source provides an audio track.
+- Can I download subtitles? Yes, VTT or SRT when available.
+- Do I need to install software? No, Vidsavey runs entirely in the browser.

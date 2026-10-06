@@ -168,6 +168,33 @@ const faqItems = [
   },
 ] as const;
 
+// SEO / GEO：结构化数据（WebApplication + FAQPage），随 SSR 输出到首屏 HTML
+const SITE_URL = "https://vidsavey.com";
+
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebApplication",
+      name: "Vidsavey",
+      url: SITE_URL,
+      applicationCategory: "MultimediaApplication",
+      operatingSystem: "Any",
+      description:
+        "Vidsavey is a free online video downloader. Paste a video URL to download supported videos as MP4 or MP3, plus available subtitles.",
+      offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+    },
+    {
+      "@type": "FAQPage",
+      mainEntity: faqItems.map((item) => ({
+        "@type": "Question",
+        name: item.question,
+        acceptedAnswer: { "@type": "Answer", text: item.answer },
+      })),
+    },
+  ],
+};
+
 function formatDuration(seconds: number) {
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
@@ -1155,6 +1182,11 @@ export default function Home() {
           </div>
         </div>
       </footer>
+
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
     </div>
   );
 }

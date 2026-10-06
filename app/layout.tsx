@@ -21,12 +21,25 @@ export const metadata: Metadata = {
     "Vidsavey",
     "video downloader",
     "online video downloader",
+    "youtube videodownloader",
+    "youtube downloader",
+    "youtube to mp4",
+    "youtube videodownload",
     "MP4 downloader",
     "MP3 downloader",
     "subtitle downloader",
   ],
   authors: [{ name: "Vidsavey" }],
   robots: { index: true, follow: true },
+  alternates: {
+    canonical: "/",
+  },
+  twitter: {
+    card: "summary",
+    title: "Vidsavey - Free Online Video Downloader",
+    description:
+      "Download videos online quickly and easily with Vidsavey. Save supported videos as MP4 or MP3.",
+  },
   icons: {
     icon: "/vidsavey-mark.svg",
     shortcut: "/vidsavey-mark.svg",
