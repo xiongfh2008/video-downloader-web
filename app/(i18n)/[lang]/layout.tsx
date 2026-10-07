@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { notFound } from "next/navigation";
+import { ClarityAnalytics } from "../../../components/clarity-analytics";
 import {
   getDictionary,
   I18N_LANGS,
@@ -40,6 +41,12 @@ export async function generateMetadata({
     keywords: [...meta.keywords],
     authors: [{ name: "Vidsavey" }],
     robots: { index: true, follow: true },
+    // 站长工具所有权验证（Bing / Google / Yandex）
+    verification: {
+      google: "HlRSZuWQQ8N1mwTfdCsvenr8cyNwrQ7FJajWclMj60Y",
+      yandex: "bd9ab20df3227d5a",
+      other: { "msvalidate.01": "637B49DDC622A1D04AD4DDB6345E9C65" },
+    },
     alternates: {
       canonical: `/${lang}`,
       languages: languageAlternates("/"),
@@ -81,7 +88,10 @@ export default async function I18nRootLayout({
       dir={lang === "ar" ? "rtl" : "ltr"}
       className={`${geistSans.variable} ${geistMono.variable} h-full scroll-smooth antialiased`}
     >
-      <body className="flex min-h-full flex-col">{children}</body>
+      <body className="flex min-h-full flex-col">
+        <ClarityAnalytics />
+        {children}
+      </body>
     </html>
   );
 }
