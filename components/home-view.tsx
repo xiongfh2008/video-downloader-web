@@ -89,6 +89,8 @@ const DOWNLOAD_API_URL = `${API_BASE_URL}/api/video/download`;
 const TASK_API_BASE_URL = `${API_BASE_URL}/api/video/tasks`;
 const FILE_API_BASE_URL = `${API_BASE_URL}/api/video/file`;
 
+const DAILY_QUOTA_CLIENT_ENABLED = process.env.NEXT_PUBLIC_DAILY_DOWNLOAD_QUOTA === "true";
+
 const DOWNLOAD_POLL_INTERVAL_MS = 1000;
 const DOWNLOAD_POLL_TIMEOUT_MS = 60 * 60 * 1000;
 
@@ -178,6 +180,9 @@ function getFriendlyErrorMessage(
       return serverMessage || errors.invalidPublicUrl;
     case "rate_limited":
       return errors.rateLimited;
+    case "daily_browser_limit":
+    case "daily_ip_limit":
+      return serverMessage || errors.rateLimited;
     case "too_many_active_tasks":
       return errors.tooManyActiveTasks;
     case "queue_full":
@@ -698,7 +703,13 @@ export function HomeView({ lang, dict }: { lang: Lang; dict: Dictionary }) {
     try {
       const response = await fetch(DOWNLOAD_API_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        ...(DAILY_QUOTA_CLIENT_ENABLED ? { credentials: "include" as const } : {}),
+        headers: {
+          "Content-Type": "application/json",
+          ...(DAILY_QUOTA_CLIENT_ENABLED
+            ? { "X-Download-Request-ID": crypto.randomUUID() }
+            : {}),
+        },
         body: JSON.stringify(
           downloadMode === "subtitles"
             ? {
