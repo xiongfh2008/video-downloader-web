@@ -16,6 +16,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Callable
 
 
 class QuotaExceeded(Exception):
@@ -182,20 +183,35 @@ class DailyDownloadQuota:
                         ("charged" if success else "released",request_id))
             return True
 
-    def cleanup_stale(self, max_age_seconds: int = 7200) -> int:
-        """Release abandoned reservations only if the owning task is known dead.
+    def cleanup_stale(self, max_age_seconds: int = 7200,
+                      is_task_dead: "Callable[[str | None], bool] | None" = None) -> int:
+        """Release abandoned reservations only after task-state reconciliation.
 
-        CALLER MUST reconcile task state first. This method is not automatically
-        scheduled, as a running task must never lose its reserved slot.
+        P0-5: a claim with an attached task_id is released ONLY if the caller
+        supplied an ``is_task_dead`` callback and it returns True for that
+        task (e.g. the task is failed/expired/missing in the task store).
+        Running tasks must never lose their reserved slot. Claims without a
+        task_id are treated as dead after the age cutoff (task creation never
+        completed).
         """
-        cutoff=time.time()-max_age_seconds
+        cutoff = time.time() - max_age_seconds
         with self._connect() as con:
-            rows=con.execute("SELECT request_id FROM quota_claims WHERE status='reserved' AND created_at<?",
-                             (cutoff,)).fetchall()
-        count=0
+            rows = con.execute(
+                "SELECT request_id, task_id FROM quota_claims "
+                "WHERE status='reserved' AND created_at<?",
+                (cutoff,),
+            ).fetchall()
+        count = 0
         for row in rows:
-            if self.finish(row["request_id"],success=False):
-                count+=1
+            task_id = row["task_id"]
+            if task_id is None:
+                dead = True
+            elif is_task_dead is not None:
+                dead = bool(is_task_dead(task_id))
+            else:
+                continue  # cannot confirm: keep the reservation
+            if dead and self.finish(row["request_id"], success=False):
+                count += 1
         return count
 
     def remaining(self, browser_cookie: str, ip: str, now: datetime | None = None) -> int:

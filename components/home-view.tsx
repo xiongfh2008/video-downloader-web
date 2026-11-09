@@ -101,6 +101,18 @@ const QUOTA_API_URL = `${API_BASE_URL}/api/video/quota`;
 
 const DAILY_QUOTA_CLIENT_ENABLED = process.env.NEXT_PUBLIC_DAILY_DOWNLOAD_QUOTA === "true";
 
+// 每日下载额度仅适用于 YouTube / Bilibili（后端同一规则），其他平台不展示。
+const QUOTA_PLATFORM_HOST_PATTERN =
+  /(^|\.)(youtube\.com|youtu\.be|bilibili\.com|b23\.tv)$/i;
+
+function isQuotaPlatformUrl(rawUrl: string): boolean {
+  try {
+    return QUOTA_PLATFORM_HOST_PATTERN.test(new URL(rawUrl).hostname);
+  } catch {
+    return false;
+  }
+}
+
 const DOWNLOAD_POLL_INTERVAL_MS = 1000;
 const DOWNLOAD_POLL_TIMEOUT_MS = 60 * 60 * 1000;
 
@@ -489,6 +501,8 @@ export function HomeView({ lang, dict }: { lang: Lang; dict: Dictionary }) {
   // 每日下载额度（服务端为准）：null 表示未知/不可用，此时隐藏额度展示。
   const [quotaRemaining, setQuotaRemaining] = useState<number | null>(null);
   const [quotaLimit, setQuotaLimit] = useState(2);
+  // 仅 YouTube / Bilibili 展示额度（与后端限额范围一致）。
+  const quotaPlatform = isQuotaPlatformUrl(url.trim());
 
   const fetchQuota = async (): Promise<number | null> => {
     if (!DAILY_QUOTA_CLIENT_ENABLED) return null;
@@ -738,7 +752,11 @@ export function HomeView({ lang, dict }: { lang: Lang; dict: Dictionary }) {
     if (!videoInfo || isDownloading) return;
 
     // 额度耗尽时前端先拦截（后端仍会强校验）。
-    if (DAILY_QUOTA_CLIENT_ENABLED && quotaRemaining === 0) {
+    if (
+      DAILY_QUOTA_CLIENT_ENABLED &&
+      quotaPlatform &&
+      quotaRemaining === 0
+    ) {
       setDownloadError(dict.quota.limitReached);
       return;
     }
@@ -1172,7 +1190,9 @@ export function HomeView({ lang, dict }: { lang: Lang; dict: Dictionary }) {
                   disabled={
                     isDownloading ||
                     subtitleDownloadDisabled ||
-                    (DAILY_QUOTA_CLIENT_ENABLED && quotaRemaining === 0)
+                    (DAILY_QUOTA_CLIENT_ENABLED &&
+                      quotaPlatform &&
+                      quotaRemaining === 0)
                   }
                   className="mt-7 flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 text-base font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
                 >
@@ -1190,7 +1210,9 @@ export function HomeView({ lang, dict }: { lang: Lang; dict: Dictionary }) {
                   )}
                 </button>
 
-                {DAILY_QUOTA_CLIENT_ENABLED && quotaRemaining !== null && (
+                {DAILY_QUOTA_CLIENT_ENABLED &&
+                  quotaPlatform &&
+                  quotaRemaining !== null && (
                   <p
                     className={`mt-3 text-center text-sm font-medium ${
                       quotaRemaining === 0 ? "text-red-600" : "text-slate-500"

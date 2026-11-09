@@ -125,6 +125,70 @@ class ProviderBudget:
                     return BudgetDecision(False, "snapany_daily_call_limit_reached")
         return BudgetDecision(True)
 
+    def try_submit(self, provider: str, task_key: str, estimated_usd: float = 0.0,
+                   now: datetime | None = None) -> BudgetDecision:
+        """Atomically verify budget caps and record the paid submission (P0-2).
+
+        The cap check and the submission insert run inside a single
+        BEGIN IMMEDIATE transaction, so concurrent workers cannot both pass
+        the check on the same remaining budget. Idempotent per task_key.
+        """
+        self._validate_task_key(task_key)
+        if provider not in ("vidfetch", "snapany"):
+            raise ValueError("unknown provider")
+        if estimated_usd < 0:
+            raise ValueError("estimated_usd must be >= 0")
+        stamp = _utc_now(now)
+        day = stamp.date().isoformat()
+        month = stamp.strftime("%Y-%m")
+        with self._connect() as con:
+            con.execute("BEGIN IMMEDIATE")
+            # Idempotent re-entry: an already-submitted task never counts as a
+            # new call and must not be blocked by the caps (worker retries).
+            row = con.execute(
+                "SELECT submitted FROM budget_tasks WHERE task_key=?", (task_key,)
+            ).fetchone()
+            if row and row["submitted"]:
+                return BudgetDecision(True)
+            if self.daily_cost_limit is not None:
+                spent = con.execute(
+                    "SELECT COALESCE(SUM(cost_usd),0) AS s FROM budget_tasks WHERE day=?",
+                    (day,),
+                ).fetchone()["s"]
+                if spent + estimated_usd > self.daily_cost_limit + 1e-9:
+                    con.rollback()
+                    return BudgetDecision(False, "daily_cost_limit_reached")
+            if self.monthly_cost_limit is not None:
+                spent = con.execute(
+                    "SELECT COALESCE(SUM(cost_usd),0) AS s FROM budget_tasks WHERE month=?",
+                    (month,),
+                ).fetchone()["s"]
+                if spent + estimated_usd > self.monthly_cost_limit + 1e-9:
+                    con.rollback()
+                    return BudgetDecision(False, "monthly_cost_limit_reached")
+            if provider == "snapany" and self.snapany_daily_call_limit is not None:
+                calls = con.execute(
+                    "SELECT COUNT(*) AS c FROM budget_tasks WHERE provider='snapany' "
+                    "AND submitted=1 AND day=?",
+                    (day,),
+                ).fetchone()["c"]
+                if calls >= self.snapany_daily_call_limit:
+                    con.rollback()
+                    return BudgetDecision(False, "snapany_daily_call_limit_reached")
+            if row:
+                con.execute(
+                    "UPDATE budget_tasks SET submitted=1, provider=?, day=?, month=? "
+                    "WHERE task_key=?",
+                    (provider, day, month, task_key),
+                )
+            else:
+                con.execute(
+                    "INSERT INTO budget_tasks(task_key,provider,day,month,submitted) "
+                    "VALUES(?,?,?,?,1)",
+                    (task_key, provider, day, month),
+                )
+            return BudgetDecision(True)
+
     def require(self, provider: str, estimated_usd: float = 0.0,
                 now: datetime | None = None) -> None:
         decision = self.check(provider, estimated_usd, now)
