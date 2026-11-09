@@ -152,6 +152,8 @@ const zhBase: WidenStrings<Dictionary> = {
     terms: "服务条款",
   },
   errors: {
+    dailyBrowserLimit: "此浏览器今日 2 次下载额度已用完，请明天（UTC）再试。",
+    dailyIpLimit: "当前网络今日 2 次下载额度已用完，请明天（UTC）再试。",
     emptyUrl: "请输入视频链接。",
     invalidUrl: "请输入有效的链接。",
     analyzeFailed: "无法解析该视频，请重试。",
@@ -175,6 +177,10 @@ const zhBase: WidenStrings<Dictionary> = {
     downloadVideoFailed: "无法下载该视频，请重试。",
     internalError: "服务器发生意外错误，请重试。",
     botCheck: "YouTube 目前要求验证该请求并非机器人。请几分钟后再试，或更换其他视频链接。",
+  },
+  quota: {
+    remaining: "今日剩余下载次数：{remaining}/{limit}",
+    limitReached: "今日下载次数已用完，请明天再试。",
   },
   meta: {
     title: "Vidsavey - 免费在线视频下载器",

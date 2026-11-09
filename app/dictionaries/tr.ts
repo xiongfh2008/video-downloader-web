@@ -155,6 +155,8 @@ const trBase: WidenStrings<Dictionary> = {
     terms: "Şartlar",
   },
   errors: {
+    dailyBrowserLimit: "Bu tarayıcı için günlük 2 indirme sınırına ulaştınız. Yarın tekrar deneyin (UTC).",
+    dailyIpLimit: "Bu ağ için günlük 2 indirme sınırına ulaşıldı. Yarın tekrar deneyin (UTC).",
     emptyUrl: "Lütfen bir video URL'si girin.",
     invalidUrl: "Lütfen geçerli bir URL girin.",
     analyzeFailed: "Bu video analiz edilemedi. Lütfen tekrar deneyin.",
@@ -194,6 +196,10 @@ const trBase: WidenStrings<Dictionary> = {
       "Sunucuda beklenmeyen bir hata oluştu. Lütfen tekrar deneyin.",
     botCheck:
       "YouTube şu anda otomasyon doğrulaması istiyor. Lütfen birkaç dakika bekleyip tekrar deneyin veya başka bir video bağlantısı deneyin.",
+  },
+  quota: {
+    remaining: "Bugün kalan indirme: {remaining}/{limit}",
+    limitReached: "Günlük indirme sınırına ulaşıldı. Lütfen yarın tekrar deneyin.",
   },
   meta: {
     title: "Vidsavey - Ücretsiz Çevrimiçi Video İndirici",

@@ -155,6 +155,8 @@ const deBase: WidenStrings<Dictionary> = {
     terms: "AGB",
   },
   errors: {
+    dailyBrowserLimit: "Sie haben das tägliche Limit von 2 Downloads für diesen Browser erreicht. Versuchen Sie es morgen erneut (UTC).",
+    dailyIpLimit: "Das tägliche Limit von 2 Downloads für dieses Netzwerk wurde erreicht. Versuchen Sie es morgen erneut (UTC).",
     emptyUrl: "Bitte gib eine Video-URL ein.",
     invalidUrl: "Bitte gib eine gültige URL ein.",
     analyzeFailed: "Dieses Video konnte nicht analysiert werden. Bitte versuche es erneut.",
@@ -194,6 +196,10 @@ const deBase: WidenStrings<Dictionary> = {
       "Auf dem Server ist ein unerwarteter Fehler aufgetreten. Bitte versuche es erneut.",
     botCheck:
       "YouTube verlangt derzeit eine Anti-Bot-Verifizierung. Warte bitte einige Minuten und versuche es erneut, oder verwende einen anderen Video-Link.",
+  },
+  quota: {
+    remaining: "Verbleibende Downloads heute: {remaining}/{limit}",
+    limitReached: "Tägliches Download-Limit erreicht. Bitte versuchen Sie es morgen erneut.",
   },
   meta: {
     title: "Vidsavey - Kostenloser Online-Video-Downloader",

@@ -155,6 +155,8 @@ const viBase: WidenStrings<Dictionary> = {
     terms: "Điều khoản",
   },
   errors: {
+    dailyBrowserLimit: "Bạn đã đạt giới hạn 2 lượt tải hàng ngày cho trình duyệt này. Vui lòng thử lại vào ngày mai (UTC).",
+    dailyIpLimit: "Giới hạn 2 lượt tải hàng ngày cho mạng này đã đạt. Vui lòng thử lại vào ngày mai (UTC).",
     emptyUrl: "Vui lòng nhập URL video.",
     invalidUrl: "Vui lòng nhập URL hợp lệ.",
     analyzeFailed: "Không thể phân tích video này. Vui lòng thử lại.",
@@ -194,6 +196,10 @@ const viBase: WidenStrings<Dictionary> = {
       "Máy chủ gặp lỗi ngoài dự kiến. Vui lòng thử lại.",
     botCheck:
       "YouTube hiện đang yêu cầu xác minh chống tự động hóa. Vui lòng đợi vài phút rồi thử lại, hoặc thử liên kết video khác.",
+  },
+  quota: {
+    remaining: "Số lượt tải còn lại hôm nay: {remaining}/{limit}",
+    limitReached: "Đã đạt giới hạn tải hàng ngày. Vui lòng thử lại vào ngày mai.",
   },
   meta: {
     title: "Vidsavey - Trình tải video trực tuyến miễn phí",

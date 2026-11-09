@@ -155,6 +155,8 @@ const koBase: WidenStrings<Dictionary> = {
     terms: "이용약관",
   },
   errors: {
+    dailyBrowserLimit: "이 브라우저의 일일 다운로드 한도(2회)에 도달했습니다. 내일(UTC) 다시 시도해 주세요.",
+    dailyIpLimit: "이 네트워크의 일일 다운로드 한도(2회)에 도달했습니다. 내일(UTC) 다시 시도해 주세요.",
     emptyUrl: "동영상 URL을 입력해 주세요.",
     invalidUrl: "유효한 URL을 입력해 주세요.",
     analyzeFailed: "이 동영상을 분석할 수 없습니다. 다시 시도해 주세요.",
@@ -194,6 +196,10 @@ const koBase: WidenStrings<Dictionary> = {
       "서버에 예기치 않은 오류가 발생했습니다. 다시 시도해 주세요.",
     botCheck:
       "YouTube가 현재 자동화되지 않은 요청인지 확인을 요청하고 있습니다. 몇 분 후 다시 시도하거나 다른 동영상 링크로 시도해 주세요.",
+  },
+  quota: {
+    remaining: "오늘 남은 다운로드 횟수: {remaining}/{limit}",
+    limitReached: "일일 다운로드 한도에 도달했습니다. 내일 다시 시도해 주세요.",
   },
   meta: {
     title: "Vidsavey - 무료 온라인 동영상 다운로더",

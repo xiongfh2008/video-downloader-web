@@ -155,6 +155,8 @@ const ptBase: WidenStrings<Dictionary> = {
     terms: "Termos",
   },
   errors: {
+    dailyBrowserLimit: "Você atingiu o limite diário de 2 downloads para este navegador. Tente novamente amanhã (UTC).",
+    dailyIpLimit: "O limite diário de 2 downloads desta rede foi atingido. Tente novamente amanhã (UTC).",
     emptyUrl: "Insira o URL de um vídeo.",
     invalidUrl: "Insira um URL válido.",
     analyzeFailed: "Não foi possível analisar este vídeo. Tente novamente.",
@@ -194,6 +196,10 @@ const ptBase: WidenStrings<Dictionary> = {
       "O servidor encontrou um erro inesperado. Tente novamente.",
     botCheck:
       "O YouTube está pedindo uma verificação anti-robô. Aguarde alguns minutos e tente novamente, ou tente outro link de vídeo.",
+  },
+  quota: {
+    remaining: "Downloads restantes hoje: {remaining}/{limit}",
+    limitReached: "Limite diário de downloads atingido. Tente novamente amanhã.",
   },
   meta: {
     title: "Vidsavey - Baixador de vídeos online gratuito",

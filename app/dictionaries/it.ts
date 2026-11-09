@@ -155,6 +155,8 @@ const itBase: WidenStrings<Dictionary> = {
     terms: "Termini",
   },
   errors: {
+    dailyBrowserLimit: "Hai raggiunto il limite giornaliero di 2 download per questo browser. Riprova domani (UTC).",
+    dailyIpLimit: "Il limite giornaliero di 2 download per questa rete è stato raggiunto. Riprova domani (UTC).",
     emptyUrl: "Inserisci l'URL di un video.",
     invalidUrl: "Inserisci un URL valido.",
     analyzeFailed: "Impossibile analizzare questo video. Riprova.",
@@ -194,6 +196,10 @@ const itBase: WidenStrings<Dictionary> = {
       "Il server ha riscontrato un errore imprevisto. Riprova.",
     botCheck:
       "YouTube sta richiedendo una verifica anti-bot. Attendi qualche minuto e riprova, oppure prova con un altro link video.",
+  },
+  quota: {
+    remaining: "Download rimasti oggi: {remaining}/{limit}",
+    limitReached: "Limite giornaliero di download raggiunto. Riprova domani.",
   },
   meta: {
     title: "Vidsavey - Video downloader online gratuito",
