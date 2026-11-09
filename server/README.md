@@ -1,50 +1,72 @@
-# VIDSAVEY 双供应商接入参考包（未部署）
+# VIDSAVEY — YouTube / Bilibili 下载集成
 
-目标：**VidFetch 优先、SnapAny 备用**；**同一浏览器与同一公网 IP 各 2 次/UTC 自然日**。
+> **状态说明（2026-11-10）**：本目录是 GitHub 分支中的 Python bridge 代码，**不是当前 Contabo VPS 的完整 FastAPI 应用**。按项目维护人员 2026-11-10 的交付报告，bridge 已在 VPS 上接入并部署，浏览器/IP 配额、TikTok 回归已做生产验证；本仓库未能独立读取该生产运行版本。**VidFetch 和 SnapAny 的真实下载仍未验证**（生产未配置 API Key），不能宣布 YouTube 或 Bilibili 已修复。
 
-> 重要：本包提供通过静态检查、可离线测试的接入模块和对接说明，但**没有接入到 VIDSAVEY 生产 FastAPI 后端**，没有 API Key，也没有进行真实第三方视频下载测试。不能直接将目录复制到生产目录后认为已经上线。完整上线需要结合现有 FastAPI 队列/SQLite/错误返回约定接线并验证。
+## 本次规则
 
-## 官方接口（2026-11-09 核验）
+| 平台 | 默认引擎 | 备用 | 每日限额 |
+| --- | --- | --- | --- |
+| YouTube（MP4/MP3） | VidFetch（启用供应商模式后） | SnapAny YouTube proxy | 浏览器与 IP 各 2 次/UTC 日 |
+| Bilibili | 原有 yt-dlp | SnapAny extract（只有实际测试成功后启用） | 与 YouTube 共享上述 2 次 |
+| 其他（TikTok、Instagram 等） | 原有 yt-dlp | 不调用以上供应商 | 本次新增 2 次限额不适用 |
 
-- VidFetch：`POST https://api.vidfetch.dev/v1/info`（免费信息查询），`POST /v1/downloads`（异步返回 202 + `id`），`GET /v1/downloads/{id}`（直到 `completed` / `failed`），完成后使用 `download_url`。支持 `mp3` 和 `144p`–`2160p`。https://www.vidfetch.dev/youtube-downloader-api
-- SnapAny：`POST https://api.snapany.com/openapi/v1/youtube/proxy-download`，返回 `medias[].variants[].video_proxy_url`、`audio_proxy_url`、`resource_proxy_url`；按官方文档 1080p 及以下支持代理，链接一般应按 30 分钟过期处理。https://platform.snapany.com/zh/docs/youtube-proxy-download
+*YouTube 字幕仍走现有字幕实现，不送入 VidFetch/SnapAny 的付费视频接口；限额由 VPS 的实际任务路由实现。*
 
-## 目录
-
-- `vidsavey_bridge/providers.py`：VidFetch 同步 Worker 适配、SnapAny 代理流/FFmpeg 适配、优先级与故障转移。
-- `vidsavey_bridge/quota.py`：SQLite 原子化浏览器和 IP 双限额、任务预占、成功扣次、失败释放、幂等。
-- `vidsavey_bridge/fastapi_wiring.py`：可直接并入现有 FastAPI 应用的接线模块：`GET /api/video/quota`（剩余次数 + Cookie 签发）、`reserve_for_download()`（下载路由原子预占 + 幂等 429）、`install_quota_http_handler()`。真实客户端 IP 依赖 uvicorn `--proxy-headers --forwarded-allow-ips=<nginx>` 与 Nginx `X-Forwarded-For $remote_addr`。
-- `vidsavey_bridge/budget.py`：第三方成本保护：日/月成本上限、SnapAny 每日调用上限、按 task_key 幂等记账（防重复付费）、成功率统计。
-- `BACKEND_INTEGRATION.md`：如何接入现有 FastAPI / SQLite / 任务队列及前端。
-- `.env.example`：需要由 VPS 环境注入的变量名，**不存真实密钥**。
-- `tests/`：离线测试，覆盖同 IP、多浏览器、原子并发、重试幂等、UTC 跨天、主渠道降级、成本上限、quota 接口。
-
-## 本地运行测试
+## 安装与离线测试
 
 ```bash
-cd vidsavey_dual_provider_integration
+cd server
 python -m pip install -r requirements.txt
 python -m pytest -q
 ```
 
-## 接入建议
+前端从仓库根目录执行 `npm ci && npm run build && npm run build:vinext`。PR 分支的 `.github/workflows/vidsavey-ci.yml` 自动运行以上检查；**CI 不接触供应商密钥，也不验证真实视频下载**。
 
-1. 将 `vidsavey_bridge/` 放入现有后端 Python 包/镜像，并在容器依赖中增加 `requests`。
-2. 使用已有数据库持久化卷 `/data` 保存新增 `download_quota.sqlite3` 与 `provider_budget.sqlite3`；不可写在容器临时层。
-3. 后端应用挂载 `fastapi_wiring.create_quota_router(quota)` 提供 `GET /api/video/quota`，并调用 `install_quota_http_handler(app)`；`/api/video/download` **在创建异步任务前**改用 `reserve_for_download(request, quota, request_id)` 做原子预占（成功创建任务后 `attach_task`，创建失败 `finish(request_id, False)`）。
-4. 后端 Worker 在 YouTube MP4/MP3 分支调用 `YouTubeDownloadRouter.download`；其他平台仍走原有 yt-dlp，字幕继续使用原有字幕路径（本包不为字幕增加收费 Provider）。
-5. Worker 文件落地且旧有最终态判定成功后 `quota.finish(request_id, True)`；全部 Provider 失败/任务 cancelled/服务重启时 `quota.finish(request_id, False)`。
-6. Worker 在每次创建付费任务前调用 `budget.require(provider, estimated_usd)`（超限抛 `BudgetExceeded`），任务提交后 `record_submission`，终态后 `record_outcome`；`budget.snapshot()` 可供监控/日志输出。
-7. 每日限额为全站每个实际下载文件 2 次（浏览器 + IP 独立）。如果政策只需对 YouTube 生效，后端只对 YouTube 分支调用 `reserve`，否则对所有平台的 MP4/MP3/字幕都调用。
-8. API 响应、任务状态、文件路径继续遵守原有 `/api/video/info`、`/api/video/download`、`/api/video/tasks/{task_id}`、`/api/video/file/{task_id}` 契约；新增 `GET /api/video/quota` 为增量接口，不影响旧契约。
-9. 在受控测试环境完成两个 API 的实测；不要直接替换线上容器或生产 DNS、Nginx、Cloudflare。
+## 关键模块
 
-## 主要限制
+- `vidsavey_bridge/providers.py`：YouTube VidFetch → SnapAny Proxy、Bilibili SnapAnyExtract 候选、FFmpeg、媒体 URL 安全下载与错误分类。
+- `vidsavey_bridge/quota.py`：SQLite 按浏览器和公网 IP 双重每日额度、原子预占、任务完成扣减、失败释放、重启恢复。
+- `vidsavey_bridge/fastapi_wiring.py`：`GET /api/video/quota`、HMAC 浏览器 Cookie、HTTP 429 与代理 IP 辅助函数；必须接入实际 FastAPI 路由。
+- `vidsavey_bridge/budget.py`：`ProviderBudget.try_submit(provider, task_key, estimated_usd)` 原子核验 + 预占第三方预计费用；`record_outcome(..., cost_usd=实际费用)` 结算。
 
-- 暂无 VIDSAVEY 的 **当前生产后端源码**，因此无法完成与后端业务路由/队列的实际集成，也不能验证当前 BOPS/VPS 日志与 API 凭证；这是生产上线的真实阻塞项。
-- `requests` 通过 URL 前检查 DNS 并拒绝非公网地址，属于防御性检查，但不能取代现有容器层出站防火墙，仍存在 DNS rebinding/重定向等动态风险；建议在生产采用经限制的出站网络策略。
-- `VidFetch` 创建任务后网络超时的状态不一定能判定是否实际创建成功。本包在任务轮询超时时**不会**自动启用 SnapAny，避免双重付费/双任务；需对账确认后人工或系统重新执行。
-- SnapAny `proxy-download` 响应成功可能已经计费；下载文件或 FFmpeg 失败后不会自动重复请求该付费接口。
-- 该版本仅适配 YouTube MP4/MP3；字幕仍由原有下载通道处理，若 YouTube 字幕获取也失败，可单独评估 SnapAny 字幕 API（按次收费）。
-- 单浏览器身份依赖服务端签发 Cookie，用户主动清 Cookie / 换设备仍会获得新浏览器标识；IP 限制能减少绕过，但共享公网 IP 的不同用户也会共享 2 次额度。无法在免登录匿名系统中保证每个真实自然人唯一。
-- 本包默认主渠道视频分辨率请求 1080p，备用至多 1080p；若强制将高分辨率统一降级，要在前端明确提示。
+### 预算模块：2026-11-10 改动
+
+旧版预算代码只将已结算金额计入上限：并发提交时即使有原子事务，也可能低估尚未结算任务的潜在消费。最新版本增加 `estimated_cost_usd`，未结算任务以预计金额占用每日/月度预算，完成后改为实际费用。
+
+- 原有 `budget_tasks` 表将自动、非破坏性地添加 `estimated_cost_usd` 列。
+- **VPS 上必须实际部署新版 `budget.py`，该修复才会生效**。GitHub 更新不自动修改 VPS 文件。
+- 若日/月成本上限已配置，创建可能收费的任务时必须传入**非零、保守**的 `estimated_usd`。省略估价传 0 会使预算保护失去意义。
+- `try_submit()` 必须在外部可能收费的 API 请求**之前**执行；未确定上游是否已接收的请求不得释放预占或盲目向备用渠道重试。
+- `record_outcome()` 仅在确认最终实际收费情况后结算，未知状态保留预占待对账。
+- 实际费用可能大于估计，应用预算上限是软件防护，不是供应商消费硬限额；建议结合供应商控制台消费警报。
+
+## 历史接口与生产接线
+
+当前前端 API 契约不变：
+
+```text
+POST /api/video/info
+POST /api/video/download
+GET  /api/video/tasks/{task_id}
+GET  /api/video/file/{task_id}
+GET  /api/video/quota   # 新增
+```
+
+前端仅在 `NEXT_PUBLIC_DAILY_DOWNLOAD_QUOTA=true` 时请求额度端点和跨子域携带 Cookie。后端对 YouTube 和 Bilibili 必须强制验证额度，不能依赖前端按钮判断。
+
+生产代码与本目录可能已有差异。实际接线前需比对 VPS：
+`/opt/video-downloader/backend/app/bridge/`、`app/services/platform.py`、`app/services/quota_service.py`、`app/services/budget_service.py`、实际下载路由和任务服务；具体目录以实际服务器为准。旧版 `BACKEND_INTEGRATION.md` 的代码示例是参考而非可直接覆盖的生产路由。
+
+## 真实联调尚缺的条件
+
+- `VIDFETCH_API_KEY`、`SNAPANY_API_KEY`：仅在 VPS 的 Secret/环境变量中配置，不提交到 GitHub、不发送至聊天。
+- YouTube：以 `https://youtu.be/Bcj8Ux1vAQQ` 验证 VidFetch info/MP4/MP3 及 SnapAny Proxy 下载，确认 VPS 本地文件可播放。
+- Bilibili：用可合法下载的公开 BV 视频验证旧 yt-dlp 与 SnapAny `extract/post`；返回直链 ≠ VPS 能下载。此前 Contabo yt-dlp 遇到 412，不可假称修复。
+- 先验证接口、余额、预算、额度及其他平台回归，再考虑开启生产供应商模式和 Bilibili fallback。
+
+## 参考资料
+
+- VidFetch 官方文档：https://www.vidfetch.dev/youtube-downloader-api
+- SnapAny YouTube proxy：https://platform.snapany.com/zh/docs/youtube-proxy-download
+- SnapAny 通用提取：https://platform.snapany.com/docs/extract-post
+- GitHub PR：https://github.com/xiongfh2008/video-downloader-web/pull/1
