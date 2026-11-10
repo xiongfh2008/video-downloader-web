@@ -270,7 +270,7 @@ class ProviderBudget:
             rows = con.execute(
                 "SELECT provider, "
                 "SUM(CASE WHEN day=? THEN submitted ELSE 0 END) AS calls_today, "
-                "SUM(CASE WHEN day=? THEN submitted END) AS calls_month, "
+                "SUM(CASE WHEN month=? THEN submitted END) AS calls_month, "
                 "SUM(CASE WHEN day=? AND submitted=1 AND success IS NOT NULL "
                 "    THEN 1 ELSE 0 END) AS finished_today, "
                 "SUM(CASE WHEN day=? AND submitted=1 AND success=1 "

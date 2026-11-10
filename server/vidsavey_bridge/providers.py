@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import ipaddress
 import os
+import re
 import socket
 import subprocess
 import time
@@ -28,10 +29,14 @@ import requests
 try:  # urllib3 >= 2.x is required for DNS pinning (server_hostname support).
     import urllib3
     from urllib3 import HTTPSConnectionPool
+    from urllib3.exceptions import HTTPError
 
     _URRLIB3_PINNING = int(urllib3.__version__.split(".")[0]) >= 2
 except Exception:  # pragma: no cover - fallback for exotic environments
     _URRLIB3_PINNING = False
+
+    class HTTPError(Exception):  # type: ignore[no-redef]
+        """Placeholder so _transfer can classify errors without urllib3."""
 
 
 PERMANENT_VIDFETCH_CODES = {
@@ -42,6 +47,21 @@ PERMANENT_VIDFETCH_CODES = {
     "age_restricted",
     "unsupported_type",
     "format_unavailable",
+}
+
+# Non-sensitive error-code shape used to pull a code out of supplier bodies.
+_CODE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]{2,119}$")
+
+# VidFetch accepts these `format` values; mp3 is audio-only.
+VIDEO_QUALITY_LADDER = ("1080p", "720p", "480p", "360p", "240p", "144p")
+
+# Supplier backpressure on job creation: retry the same provider instead of
+# switching to another paid vendor (observed on the starter plan).
+RETRYABLE_CREATE_CODES = {
+    "concurrency_limit_exceeded",
+    "too_many_concurrent_jobs",
+    "rate_limit_exceeded",
+    "too_many_requests",
 }
 
 
@@ -96,14 +116,34 @@ def canonical_youtube_url(raw: str) -> str:
 
 
 def _read_error(resp: requests.Response) -> str:
+    """Extract a machine-readable error code from any supplier error body.
+
+    VidFetch nests it as {"detail": {"code": "video_too_large", ...}}, so a
+    single-level lookup returns a dict instead of a code.
+    """
     try:
-        j = resp.json()
-        if isinstance(j, dict):
-            return str(j.get("code") or j.get("error", {}).get("code") or j.get("detail")
-                       or resp.status_code)[:120]
-    except (ValueError, AttributeError):
-        pass
-    return "http_" + str(resp.status_code)
+        body = resp.json()
+    except ValueError:
+        return "http_" + str(resp.status_code)
+    code = _find_code(body)
+    return code or "http_" + str(resp.status_code)
+
+
+def _find_code(value, depth: int = 0) -> str | None:
+    if depth > 4:
+        return None
+    if isinstance(value, str):
+        text = value.strip()
+        return text[:120] if _CODE_RE.match(text) else None
+    if isinstance(value, dict):
+        for key in ("code", "error", "type", "reason", "detail", "message"):
+            if key in value:
+                found = _find_code(value[key], depth + 1)
+                if found:
+                    return found
+    if isinstance(value, list) and value:
+        return _find_code(value[0], depth + 1)
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -195,10 +235,48 @@ def _requests_get(url: str, headers: dict[str, str], session: requests.Session, 
 
 
 def _transfer(url: str, dst: Path, max_bytes: int, session: requests.Session,
-              redirects: int = 3) -> None:
+              redirects: int = 3, attempts: int = 2,
+              headers: dict[str, str] | None = None) -> None:
+    """Download a supplier media link, retrying once on a broken stream.
+
+    Proxy media links are frequently served through CDN edges that drop the
+    connection mid-body (IncompleteRead); a single clean retry recovers most
+    of those without re-billing the supplier. ``headers`` carries per-media
+    anti-hotlink headers (e.g. Bilibili Referer/User-Agent) when required.
+    """
+    last: Exception | None = None
+    for attempt in range(attempts):
+        try:
+            _transfer_once(url, dst, max_bytes, session, redirects, headers)
+            return
+        except ProviderFailure as exc:
+            if exc.kind == "permanent" or attempt == attempts - 1:
+                raise
+            last = exc
+        except (HTTPError, requests.RequestException, OSError) as exc:
+            # urllib3 ProtocolError/IncompleteRead, requests chunked-encoding
+            # errors and socket errors are transient: classify, retry, then
+            # surface as recoverable.
+            if attempt == attempts - 1:
+                raise ProviderFailure("transfer", "network_error",
+                                      type(exc).__name__,
+                                      kind="recoverable") from exc
+            last = exc
+        time.sleep(1 + attempt)
+    raise ProviderFailure("transfer", "network_error",
+                          type(last).__name__ if last else "transfer_failed",
+                          kind="recoverable")
+
+
+def _transfer_once(url: str, dst: Path, max_bytes: int, session: requests.Session,
+                   redirects: int = 3, extra_headers: dict[str, str] | None = None) -> None:
     current = url
     dst.parent.mkdir(parents=True, exist_ok=True)
     headers = {"User-Agent": "vidsavey-downloader/1.0", "Accept": "*/*"}
+    if extra_headers:
+        # Per-media anti-hotlink headers win over the generic defaults.
+        headers.update({k: v for k, v in extra_headers.items()
+                        if isinstance(k, str) and isinstance(v, str)})
     for _ in range(redirects + 1):
         parsed = urlsplit(current)
         if parsed.scheme != "https" or not parsed.hostname or parsed.username \
@@ -265,11 +343,15 @@ def _transfer(url: str, dst: Path, max_bytes: int, session: requests.Session,
 
 class VidFetchProvider:
     def __init__(self, api_key: str, session: requests.Session | None = None,
-                 api_base: str = "https://api.vidfetch.dev", timeout_seconds: int = 300):
+                 api_base: str = "https://api.vidfetch.dev", timeout_seconds: int = 300,
+                 max_video_bytes: int = 512 * 1024 * 1024):
         self.key = api_key
         self.session = session or requests.Session()
         self.base = api_base.rstrip("/")
         self.timeout = timeout_seconds
+        # Plan-level per-video ceiling (observed 0.5 GB). Free /v1/info sizes
+        # let us pick a quality that fits before creating a paid job.
+        self.max_video_bytes = max_video_bytes
 
     def _headers(self) -> dict[str, str]:
         return {"Authorization": "Bearer " + self.key, "Content-Type": "application/json"}
@@ -372,14 +454,67 @@ class VidFetchProvider:
                                   kind="uncertain") from exc
         return DownloadResult("vidfetch", dst, dst.suffix[1:], job.get("id"))
 
+    def _pick_format(self, url: str, format: str) -> str:
+        """Choose the highest quality at or below 1080p that fits the plan.
+
+        /v1/info is free and does not consume quota, so this preflight avoids
+        paying for a job that VidFetch would reject as too large.
+        """
+        try:
+            info = self.free_info(url)
+        except ProviderFailure:
+            return "1080p"
+
+        sizes: dict[str, int] = {}
+        for entry in info.get("formats") or []:
+            if not isinstance(entry, dict):
+                continue
+            quality, size = entry.get("quality"), entry.get("size")
+            if isinstance(quality, str) and isinstance(size, (int, float)) and size > 0:
+                sizes[quality] = int(size)
+        if not sizes:
+            return "1080p"
+
+        for quality in VIDEO_QUALITY_LADDER:
+            if sizes.get(quality, 0) and sizes[quality] <= self.max_video_bytes:
+                return quality
+        known = [(sizes[q], q) for q in VIDEO_QUALITY_LADDER if q in sizes]
+        return min(known)[1] if known else "1080p"
+
+    def _create_job_with_fit(self, url: str, fmt: str) -> dict:
+        """Create the job, stepping down quality if the plan ceiling rejects it.
+
+        Concurrency/rate limits are transient supplier-side backpressure: wait
+        and retry on the same provider instead of paying a second vendor for
+        the same video.
+        """
+        for attempt in range(4):
+            try:
+                return self._create_job(url, fmt)
+            except ProviderFailure as exc:
+                if exc.code in RETRYABLE_CREATE_CODES and attempt < 3:
+                    time.sleep(5 * (attempt + 1))
+                    continue
+                if exc.code != "video_too_large" or fmt == "mp3":
+                    raise
+                index = VIDEO_QUALITY_LADDER.index(fmt) + 1 \
+                    if fmt in VIDEO_QUALITY_LADDER else len(VIDEO_QUALITY_LADDER)
+                if index >= len(VIDEO_QUALITY_LADDER):
+                    raise
+                fmt = VIDEO_QUALITY_LADDER[index]
+        raise ProviderFailure("vidfetch", "create_job_unknown",
+                              "Could not create the download job",
+                              kind="uncertain")
+
     def download(self, url: str, format: str, output: Path,
                  max_bytes: int = 1024 * 1024 * 1024) -> DownloadResult:
-        fmt = "mp3" if format == "mp3" else "1080p"
-        job = self._create_job(url, fmt)
+        fmt = "mp3" if format == "mp3" else self._pick_format(url, format)
+        job = self._create_job_with_fit(url, fmt)
         job_id = job.get("id")
         if not isinstance(job_id, str) or not job_id:
             raise ProviderFailure("vidfetch", "invalid_response", "Missing download job id")
         deadline = time.monotonic() + self.timeout
+        poll_errors = 0
         while time.monotonic() < deadline:
             failure = self._job_failure(job)
             if failure is not None:
@@ -389,11 +524,19 @@ class VidFetchProvider:
             time.sleep(2)
             try:
                 job = self.poll(job_id)
+                poll_errors = 0
             except ProviderFailure as exc:
                 if exc.kind == "permanent":
                     raise
-                # Status query failed mid-flight: the job still exists and we
-                # cannot know its state -> uncertain, never re-submit (P0-1).
+                # A single transient status-query failure must not abandon a
+                # paid job that is still processing upstream. Retry the
+                # idempotent GET a few times before declaring uncertainty.
+                poll_errors += 1
+                if poll_errors < 3:
+                    time.sleep(3 * poll_errors)
+                    continue
+                # Status stayed unreadable: the job still exists and we cannot
+                # know its state -> uncertain, never re-submit (P0-1).
                 raise ProviderFailure("vidfetch", "status_unknown",
                                       "Upstream job state could not be confirmed",
                                       kind="uncertain") from exc
@@ -434,41 +577,78 @@ class SnapAnyProvider:
                                   "Missing medias") from exc
 
     @staticmethod
-    def _best_video(medias: list) -> tuple[str, int | None]:
-        """Return (proxy_url, quality) for the best <=1080p proxy video."""
+    def _media_headers(entry: dict) -> dict[str, str]:
+        raw = entry.get("headers")
+        if isinstance(raw, dict):
+            return {k: v for k, v in raw.items()
+                    if isinstance(k, str) and isinstance(v, str)}
+        return {}
+
+    @staticmethod
+    def _best_video(medias: list) -> tuple[str, int | None, dict[str, str]]:
+        """Return (url, quality, headers) for the best <=1080p video.
+
+        Supports both the YouTube proxy shape (video_proxy_url /
+        resource_proxy_url) and the generic extract shape used for Bilibili
+        (video_url / resource_url), which also carries anti-hotlink headers.
+        """
+        best: tuple[int, str, dict[str, str]] | None = None
         for entry in medias:
             if not isinstance(entry, dict) or entry.get("media_type") != "video":
                 continue
+            headers = SnapAnyProvider._media_headers(entry)
             variants = [v for v in entry.get("variants", []) if isinstance(v, dict)]
-            choices = []
             for v in variants:
                 q = v.get("quality")
                 quality = int(q) if isinstance(q, (int, float, str)) and str(q).isdigit() else None
-                url = v.get("video_proxy_url") or v.get("resource_proxy_url")
+                url = (v.get("video_proxy_url") or v.get("resource_proxy_url")
+                       or v.get("video_url"))
                 if url and (quality is None or quality <= 1080):
-                    choices.append((url, quality or 0))
-            direct = entry.get("resource_proxy_url")
+                    cand = (quality or 0, url, headers)
+                    if best is None or cand[0] > best[0]:
+                        best = cand
+            direct = entry.get("resource_proxy_url") or entry.get("resource_url")
             if direct:
-                choices.append((direct, 0))
-            if choices:
-                return max(choices, key=lambda item: item[1])
+                cand = (0, direct, headers)
+                if best is None or cand[0] > best[0]:
+                    best = cand
+        if best is not None:
+            return best[1], best[0], best[2]
         raise ProviderFailure("snapany", "no_proxy_video",
-                              "No 1080p-or-lower proxy URL available")
+                              "No 1080p-or-lower video URL available")
 
     @staticmethod
-    def _best_audio(medias: list) -> str:
+    def _best_audio(medias: list) -> tuple[str, dict[str, str]]:
+        """Return (url, headers) for the best audio stream.
+
+        Handles a dedicated audio media entry as well as audio carried inside
+        a video entry's variants (the generic-extract / Bilibili shape).
+        """
         for entry in medias:
             if not isinstance(entry, dict):
                 continue
+            headers = SnapAnyProvider._media_headers(entry)
             if entry.get("media_type") == "audio":
-                url = entry.get("resource_proxy_url") or entry.get("audio_proxy_url")
+                url = (entry.get("resource_proxy_url") or entry.get("audio_proxy_url")
+                       or entry.get("resource_url"))
                 if url:
-                    return url
+                    return url, headers
             variants = [v for v in entry.get("variants", []) if isinstance(v, dict)]
             for v in variants:
-                if v.get("audio_proxy_url"):
-                    return v["audio_proxy_url"]
+                url = v.get("audio_proxy_url") or v.get("audio_url")
+                if url:
+                    return url, headers
         raise ProviderFailure("snapany", "no_proxy_audio", "No proxy audio available")
+
+    @staticmethod
+    def _fetch_media(url: str, dst: Path, max_bytes: int,
+                     session: requests.Session, headers: dict[str, str]) -> None:
+        # Keep the 4-arg call for callers/tests that patch _transfer without
+        # anti-hotlink support; only pass headers when actually required.
+        if headers:
+            _transfer(url, dst, max_bytes, session, headers=headers)
+        else:
+            _transfer(url, dst, max_bytes, session)
 
     def _run_ffmpeg(self, args: list[str], error_code: str) -> None:
         try:
@@ -483,23 +663,25 @@ class SnapAnyProvider:
         if format == "mp3":
             source = output.with_name(output.name + "_audio.m4a")
             dst = output.with_suffix(".mp3")
-            _transfer(self._best_audio(medias), source, max_bytes, self.session)
+            audio_url, audio_headers = self._best_audio(medias)
+            self._fetch_media(audio_url, source, max_bytes, self.session, audio_headers)
             try:
                 self._run_ffmpeg(["-i", str(source), "-vn", "-codec:a", "libmp3lame",
                                   "-b:a", "192k", str(dst)], "transcode_failed")
             finally:
                 source.unlink(missing_ok=True)
         else:
-            video_url, _quality = self._best_video(medias)
+            video_url, _quality, video_headers = self._best_video(medias)
             video_dst = output.with_name(output.name + "_video.mp4")
             dst = output.with_suffix(".mp4")
             try:
-                _transfer(video_url, video_dst, max_bytes, self.session)
+                self._fetch_media(video_url, video_dst, max_bytes, self.session, video_headers)
                 try:
-                    audio_url = self._best_audio(medias)
+                    audio_url, audio_headers = self._best_audio(medias)
                     audio_dst = output.with_name(output.name + "_audio.m4a")
                     try:
-                        _transfer(audio_url, audio_dst, max_bytes, self.session)
+                        self._fetch_media(audio_url, audio_dst, max_bytes,
+                                          self.session, audio_headers)
                         self._run_ffmpeg(["-i", str(video_dst), "-i", str(audio_dst),
                                           "-map", "0:v:0", "-map", "1:a:0", "-c", "copy",
                                           "-movflags", "+faststart", str(dst)], "merge_failed")
