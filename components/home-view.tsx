@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   DEFAULT_LANG,
@@ -81,6 +81,15 @@ interface ApiErrorResponse {
       };
 }
 
+interface QuotaResponse {
+  success: boolean;
+  data: {
+    remaining: number;
+    limit: number;
+    reset_at: string;
+  };
+}
+
 class UserFacingError extends Error {}
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "";
@@ -88,6 +97,21 @@ const API_URL = `${API_BASE_URL}/api/video/info`;
 const DOWNLOAD_API_URL = `${API_BASE_URL}/api/video/download`;
 const TASK_API_BASE_URL = `${API_BASE_URL}/api/video/tasks`;
 const FILE_API_BASE_URL = `${API_BASE_URL}/api/video/file`;
+const QUOTA_API_URL = `${API_BASE_URL}/api/video/quota`;
+
+const DAILY_QUOTA_CLIENT_ENABLED = process.env.NEXT_PUBLIC_DAILY_DOWNLOAD_QUOTA === "true";
+
+// 每日下载额度仅适用于 YouTube / Bilibili（后端同一规则），其他平台不展示。
+const QUOTA_PLATFORM_HOST_PATTERN =
+  /(^|\.)(youtube\.com|youtu\.be|bilibili\.com|b23\.tv)$/i;
+
+function isQuotaPlatformUrl(rawUrl: string): boolean {
+  try {
+    return QUOTA_PLATFORM_HOST_PATTERN.test(new URL(rawUrl).hostname);
+  } catch {
+    return false;
+  }
+}
 
 const DOWNLOAD_POLL_INTERVAL_MS = 1000;
 const DOWNLOAD_POLL_TIMEOUT_MS = 60 * 60 * 1000;
@@ -178,6 +202,10 @@ function getFriendlyErrorMessage(
       return serverMessage || errors.invalidPublicUrl;
     case "rate_limited":
       return errors.rateLimited;
+    case "daily_browser_limit":
+      return errors.dailyBrowserLimit;
+    case "daily_ip_limit":
+      return errors.dailyIpLimit;
     case "too_many_active_tasks":
       return errors.tooManyActiveTasks;
     case "queue_full":
@@ -470,6 +498,57 @@ export function HomeView({ lang, dict }: { lang: Lang; dict: Dictionary }) {
     useState<DownloadTaskStatus>("idle");
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [subtitleSearch, setSubtitleSearch] = useState("");
+  // 每日下载额度（服务端为准）：null 表示未知/不可用，此时隐藏额度展示。
+  const [quotaRemaining, setQuotaRemaining] = useState<number | null>(null);
+  const [quotaLimit, setQuotaLimit] = useState(2);
+  // 仅 YouTube / Bilibili 展示额度（与后端限额范围一致）。
+  const quotaPlatform = isQuotaPlatformUrl(url.trim());
+
+  const fetchQuota = async (): Promise<number | null> => {
+    if (!DAILY_QUOTA_CLIENT_ENABLED) return null;
+    try {
+      const response = await fetch(QUOTA_API_URL, {
+        method: "GET",
+        cache: "no-store",
+        credentials: "include",
+      });
+      if (!response.ok) return null;
+      const body: QuotaResponse = await response.json();
+      if (!body.success) return null;
+      const remaining = Math.max(0, Number(body.data.remaining) || 0);
+      const limit = Math.max(1, Number(body.data.limit) || 2);
+      setQuotaRemaining(remaining);
+      setQuotaLimit(limit);
+      return remaining;
+    } catch {
+      return null;
+    }
+  };
+
+  useEffect(() => {
+    if (!DAILY_QUOTA_CLIENT_ENABLED) return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const response = await fetch(QUOTA_API_URL, {
+          method: "GET",
+          cache: "no-store",
+          credentials: "include",
+        });
+        if (!response.ok || cancelled) return;
+        const body: QuotaResponse = await response.json();
+        if (!body.success || cancelled) return;
+        setQuotaRemaining(Math.max(0, Number(body.data.remaining) || 0));
+        setQuotaLimit(Math.max(1, Number(body.data.limit) || 2));
+      } catch {
+        // 额度接口不可用时静默隐藏展示，下载时仍由后端强校验。
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // SEO / GEO：结构化数据（WebApplication + FAQPage），随 SSR 输出到首屏 HTML
   const jsonLd = {
@@ -672,6 +751,16 @@ export function HomeView({ lang, dict }: { lang: Lang; dict: Dictionary }) {
   const handleDownload = async () => {
     if (!videoInfo || isDownloading) return;
 
+    // 额度耗尽时前端先拦截（后端仍会强校验）。
+    if (
+      DAILY_QUOTA_CLIENT_ENABLED &&
+      quotaPlatform &&
+      quotaRemaining === 0
+    ) {
+      setDownloadError(dict.quota.limitReached);
+      return;
+    }
+
     if (downloadMode === "subtitles") {
       const track = subtitleTracks.find(
         (item) =>
@@ -694,11 +783,18 @@ export function HomeView({ lang, dict }: { lang: Lang; dict: Dictionary }) {
     setDownloadStatus("queued");
     setDownloadProgress(0);
     setIsDownloading(true);
+    let downloadSucceeded = false;
 
     try {
       const response = await fetch(DOWNLOAD_API_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        ...(DAILY_QUOTA_CLIENT_ENABLED ? { credentials: "include" as const } : {}),
+        headers: {
+          "Content-Type": "application/json",
+          ...(DAILY_QUOTA_CLIENT_ENABLED
+            ? { "X-Download-Request-ID": crypto.randomUUID() }
+            : {}),
+        },
         body: JSON.stringify(
           downloadMode === "subtitles"
             ? {
@@ -713,6 +809,12 @@ export function HomeView({ lang, dict }: { lang: Lang; dict: Dictionary }) {
 
       if (!response.ok) {
         const apiError = await readApiError(response);
+        if (
+          apiError.code === "daily_browser_limit" ||
+          apiError.code === "daily_ip_limit"
+        ) {
+          setQuotaRemaining(0);
+        }
         throw new UserFacingError(
           getFriendlyErrorMessage(
             apiError.code,
@@ -780,6 +882,11 @@ export function HomeView({ lang, dict }: { lang: Lang; dict: Dictionary }) {
           window.setTimeout(() => iframe.remove(), 60_000);
 
           setDownloadProgress(100);
+          // 成功后乐观扣减展示；下次加载会以服务端数据校正。
+          setQuotaRemaining((prev) =>
+            prev === null ? null : Math.max(0, prev - 1),
+          );
+          downloadSucceeded = true;
           return;
         }
 
@@ -805,6 +912,9 @@ export function HomeView({ lang, dict }: { lang: Lang; dict: Dictionary }) {
       }
     } finally {
       setIsDownloading(false);
+      // 失败释放额度/服务端校正：重新拉取剩余次数（额度关闭时为空操作）。
+      // 成功路径使用乐观扣减，避免服务端计费时序差异导致展示回跳。
+      if (!downloadSucceeded) void fetchQuota();
     }
   };
 
@@ -1077,7 +1187,13 @@ export function HomeView({ lang, dict }: { lang: Lang; dict: Dictionary }) {
                 <button
                   type="button"
                   onClick={handleDownload}
-                  disabled={isDownloading || subtitleDownloadDisabled}
+                  disabled={
+                    isDownloading ||
+                    subtitleDownloadDisabled ||
+                    (DAILY_QUOTA_CLIENT_ENABLED &&
+                      quotaPlatform &&
+                      quotaRemaining === 0)
+                  }
                   className="mt-7 flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 text-base font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   {isDownloading ? (
@@ -1093,6 +1209,23 @@ export function HomeView({ lang, dict }: { lang: Lang; dict: Dictionary }) {
                     }`
                   )}
                 </button>
+
+                {DAILY_QUOTA_CLIENT_ENABLED &&
+                  quotaPlatform &&
+                  quotaRemaining !== null && (
+                  <p
+                    className={`mt-3 text-center text-sm font-medium ${
+                      quotaRemaining === 0 ? "text-red-600" : "text-slate-500"
+                    }`}
+                    aria-live="polite"
+                  >
+                    {quotaRemaining === 0
+                      ? dict.quota.limitReached
+                      : dict.quota.remaining
+                          .replace("{remaining}", String(quotaRemaining))
+                          .replace("{limit}", String(quotaLimit))}
+                  </p>
+                )}
 
                 {isDownloading && (
                   <div className="mt-3" aria-live="polite">

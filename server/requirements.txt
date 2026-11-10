@@ -1,0 +1,5 @@
+requests>=2.31,<3
+# Test-only dependencies (the production FastAPI app already ships fastapi).
+fastapi>=0.108,<1
+httpx>=0.24,<0.28
+pytest>=8,<10

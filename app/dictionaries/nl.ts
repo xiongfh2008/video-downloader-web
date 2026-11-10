@@ -155,6 +155,8 @@ const nlBase: WidenStrings<Dictionary> = {
     terms: "Voorwaarden",
   },
   errors: {
+    dailyBrowserLimit: "U heeft het dagelijkse limiet van 2 downloads voor deze browser bereikt. Probeer het morgen (UTC) opnieuw.",
+    dailyIpLimit: "Het dagelijkse limiet van 2 downloads voor dit netwerk is bereikt. Probeer het morgen (UTC) opnieuw.",
     emptyUrl: "Voer een video-URL in.",
     invalidUrl: "Voer een geldige URL in.",
     analyzeFailed: "Deze video kon niet worden geanalyseerd. Probeer het opnieuw.",
@@ -194,6 +196,10 @@ const nlBase: WidenStrings<Dictionary> = {
       "Er is een onverwachte fout opgetreden op de server. Probeer het opnieuw.",
     botCheck:
       "YouTube vraagt momenteel om een anti-botverificatie. Wacht enkele minuten en probeer het opnieuw, of gebruik een andere videolink.",
+  },
+  quota: {
+    remaining: "Resterende downloads vandaag: {remaining}/{limit}",
+    limitReached: "Dagelijkse downloadlimiet bereikt. Probeer het morgen opnieuw.",
   },
   meta: {
     title: "Vidsavey - Gratis Online Video Downloader",

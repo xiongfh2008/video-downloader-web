@@ -155,6 +155,8 @@ const plBase: WidenStrings<Dictionary> = {
     terms: "Regulamin",
   },
   errors: {
+    dailyBrowserLimit: "Osiągnięto dzienny limit 2 pobrań dla tej przeglądarki. Spróbuj ponownie jutro (UTC).",
+    dailyIpLimit: "Osiągnięto dzienny limit 2 pobrań dla tej sieci. Spróbuj ponownie jutro (UTC).",
     emptyUrl: "Wprowadź adres URL filmu.",
     invalidUrl: "Wprowadź prawidłowy adres URL.",
     analyzeFailed: "Nie można przeanalizować tego filmu. Spróbuj ponownie.",
@@ -194,6 +196,10 @@ const plBase: WidenStrings<Dictionary> = {
       "Wystąpił nieoczekiwany błąd serwera. Spróbuj ponownie.",
     botCheck:
       "YouTube obecnie żąda weryfikacji antybotowej. Poczekaj kilka minut i spróbuj ponownie lub użyj innego linku do filmu.",
+  },
+  quota: {
+    remaining: "Pozostałe pobrania dzisiaj: {remaining}/{limit}",
+    limitReached: "Osiągnięto dzienny limit pobrań. Spróbuj ponownie jutro.",
   },
   meta: {
     title: "Vidsavey - Darmowy pobieracz wideo online",

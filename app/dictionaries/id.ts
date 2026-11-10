@@ -155,6 +155,8 @@ const idBase: WidenStrings<Dictionary> = {
     terms: "Ketentuan",
   },
   errors: {
+    dailyBrowserLimit: "Anda telah mencapai batas harian 2 unduhan untuk browser ini. Coba lagi besok (UTC).",
+    dailyIpLimit: "Batas harian 2 unduhan untuk jaringan ini telah tercapai. Coba lagi besok (UTC).",
     emptyUrl: "Silakan masukkan URL video.",
     invalidUrl: "Silakan masukkan URL yang valid.",
     analyzeFailed: "Tidak dapat menganalisis video ini. Silakan coba lagi.",
@@ -194,6 +196,10 @@ const idBase: WidenStrings<Dictionary> = {
       "Server mengalami kesalahan yang tidak terduga. Silakan coba lagi.",
     botCheck:
       "YouTube saat ini meminta verifikasi anti-otomatis. Tunggu beberapa menit lalu coba lagi, atau gunakan tautan video lain.",
+  },
+  quota: {
+    remaining: "Sisa unduhan hari ini: {remaining}/{limit}",
+    limitReached: "Batas unduhan harian tercapai. Silakan coba lagi besok.",
   },
   meta: {
     title: "Vidsavey - Pengunduh Video Online Gratis",

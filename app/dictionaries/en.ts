@@ -145,6 +145,8 @@ export const en = {
     terms: "Terms",
   },
   errors: {
+    dailyBrowserLimit: "You've reached the daily limit of 2 downloads for this browser. Please try again tomorrow (UTC).",
+    dailyIpLimit: "The daily download limit has been reached for this network. Please try again tomorrow (UTC).",
     emptyUrl: "Please enter a video URL.",
     invalidUrl: "Please enter a valid URL.",
     analyzeFailed: "Unable to analyze this video. Please try again.",
@@ -174,6 +176,10 @@ export const en = {
       "The server encountered an unexpected error. Please try again.",
     botCheck:
       "YouTube is currently asking us to verify that this request is not automated. Please wait a few minutes and try again, or try a different video link.",
+  },
+  quota: {
+    remaining: "Downloads remaining today: {remaining}/{limit}",
+    limitReached: "Daily download limit reached. Please try again tomorrow.",
   },
   meta: {
     title: "Vidsavey - Free Online Video Downloader",

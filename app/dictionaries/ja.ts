@@ -155,6 +155,8 @@ const jaBase: WidenStrings<Dictionary> = {
     terms: "利用規約",
   },
   errors: {
+    dailyBrowserLimit: "このブラウザの本日のダウンロード上限（2 回）に達しました。明日（UTC）にもう一度お試しください。",
+    dailyIpLimit: "このネットワークの本日のダウンロード上限（2 回）に達しました。明日（UTC）にもう一度お試しください。",
     emptyUrl: "動画のURLを入力してください。",
     invalidUrl: "有効なURLを入力してください。",
     analyzeFailed: "この動画を解析できませんでした。もう一度お試しください。",
@@ -194,6 +196,10 @@ const jaBase: WidenStrings<Dictionary> = {
       "サーバーで予期しないエラーが発生しました。もう一度お試しください。",
     botCheck:
       "YouTubeが現在、自動アクセスではないことの確認を求めています。数分待ってからもう一度お試しいただくか、別の動画リンクをお試しください。",
+  },
+  quota: {
+    remaining: "本日の残りダウンロード回数：{remaining}/{limit}",
+    limitReached: "本日のダウンロード回数の上限に達しました。明日もう一度お試しください。",
   },
   meta: {
     title: "Vidsavey - 無料オンライン動画ダウンローダー",
