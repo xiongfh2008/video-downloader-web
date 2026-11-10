@@ -99,7 +99,9 @@ const TASK_API_BASE_URL = `${API_BASE_URL}/api/video/tasks`;
 const FILE_API_BASE_URL = `${API_BASE_URL}/api/video/file`;
 const QUOTA_API_URL = `${API_BASE_URL}/api/video/quota`;
 
-const DAILY_QUOTA_CLIENT_ENABLED = process.env.NEXT_PUBLIC_DAILY_DOWNLOAD_QUOTA === "true";
+// The API requires idempotency headers independently of this UI toggle.
+// Quota display is enabled by default once the backend quota endpoint is live.
+const DAILY_QUOTA_CLIENT_ENABLED = process.env.NEXT_PUBLIC_DAILY_DOWNLOAD_QUOTA !== "false";
 
 // 每日下载额度仅适用于 YouTube / Bilibili（后端同一规则），其他平台不展示。
 const QUOTA_PLATFORM_HOST_PATTERN =
@@ -788,12 +790,10 @@ export function HomeView({ lang, dict }: { lang: Lang; dict: Dictionary }) {
     try {
       const response = await fetch(DOWNLOAD_API_URL, {
         method: "POST",
-        ...(DAILY_QUOTA_CLIENT_ENABLED ? { credentials: "include" as const } : {}),
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
-          ...(DAILY_QUOTA_CLIENT_ENABLED
-            ? { "X-Download-Request-ID": crypto.randomUUID() }
-            : {}),
+          "X-Download-Request-ID": crypto.randomUUID(),
         },
         body: JSON.stringify(
           downloadMode === "subtitles"
